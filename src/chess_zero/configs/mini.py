@@ -47,7 +47,7 @@ class TrainerConfig:
         self.vram_frac = 1.0
         self.batch_size = 256 # tune this to your gpu memory
         self.epoch_to_checkpoint = 1
-        self.dataset_size = 10000
+        self.dataset_size = 100000
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
@@ -58,7 +58,7 @@ class ModelConfig:
     cnn_filter_num = 256
     cnn_first_filter_size = 5
     cnn_filter_size = 3
-    res_layer_num = 8
+    res_layer_num = 10
     l2_reg = 1e-4
     value_fc_size = 256
     distributed = False

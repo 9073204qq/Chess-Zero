@@ -138,7 +138,6 @@ class OptimizeWorker:
         # noinspection PyAttributeOutsideInit
         with ProcessPoolExecutor(max_workers=7) as executor:
             games = get_games_from_all_files(self.config)
-            print(games)
             for res in as_completed([executor.submit(load_data_from_game, self.config, game) for game in games]): #poisoned reference (memleak)
                 yield res.result()
         self.more_data = False
