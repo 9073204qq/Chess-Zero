@@ -38,9 +38,9 @@ class ChessModel:
         in_x = x = Input((18, 8, 8))
 
         # (batch, channels, height, width)
-        x = Conv2D(filters=mc.cnn_filter_num, kernel_size=mc.cnn_first_filter_size, padding="same",
+        x = Conv2D(filters=mc.cnn_first_filter_num, kernel_size=mc.cnn_first_filter_size, padding="same",
                    data_format="channels_first", use_bias=False, kernel_regularizer=l2(mc.l2_reg),
-                   name="input_conv-"+str(mc.cnn_first_filter_size)+"-"+str(mc.cnn_filter_num))(x)
+                   name="input_conv-"+str(mc.cnn_first_filter_size)+"-"+str(mc.cnn_first_filter_num))(x)
         x = BatchNormalization(axis=1, name="input_batchnorm")(x)
         x = Activation("relu", name="input_relu")(x)
 
@@ -74,14 +74,14 @@ class ChessModel:
         mc = self.config.model
         in_x = x
         res_name = "res"+str(index)
-        x = Conv2D(filters=mc.cnn_filter_num, kernel_size=mc.cnn_filter_size, padding="same",
+        x = Conv2D(filters=mc.cnn_filter_num[index*2-2], kernel_size=mc.cnn_filter_size[index*2-2], padding="same",
                    data_format="channels_first", use_bias=False, kernel_regularizer=l2(mc.l2_reg), 
-                   name=res_name+"_conv1-"+str(mc.cnn_filter_size)+"-"+str(mc.cnn_filter_num))(x)
+                   name=res_name+"_conv1-"+str(mc.cnn_filter_size[index*2-2])+"-"+str(mc.cnn_filter_num[index*2-2]))(x)
         x = BatchNormalization(axis=1, name=res_name+"_batchnorm1")(x)
         x = Activation("relu",name=res_name+"_relu1")(x)
-        x = Conv2D(filters=mc.cnn_filter_num, kernel_size=mc.cnn_filter_size, padding="same",
+        x = Conv2D(filters=mc.cnn_filter_num[index*2-1], kernel_size=mc.cnn_filter_size[index*2-1], padding="same",
                    data_format="channels_first", use_bias=False, kernel_regularizer=l2(mc.l2_reg), 
-                   name=res_name+"_conv2-"+str(mc.cnn_filter_size)+"-"+str(mc.cnn_filter_num))(x)
+                   name=res_name+"_conv2-"+str(mc.cnn_filter_size[index*2-1])+"-"+str(mc.cnn_filter_num[index*2-1]))(x)
         x = BatchNormalization(axis=1, name="res"+str(index)+"_batchnorm2")(x)
         x = Add(name=res_name+"_add")([in_x, x])
         x = Activation("relu", name=res_name+"_relu2")(x)
