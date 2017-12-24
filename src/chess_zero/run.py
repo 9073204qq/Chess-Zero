@@ -10,7 +10,7 @@ if _PATH_ not in sys.path:
 
 
 if __name__ == "__main__":
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
     sys.setrecursionlimit(10000)
     from chess_zero import manager
     manager.start()
