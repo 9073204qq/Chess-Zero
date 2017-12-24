@@ -1,6 +1,6 @@
 import os
 from collections import deque
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from logging import getLogger
 from time import sleep, time
@@ -134,6 +134,7 @@ class OptimizeWorker:
 
 
     def get_all_games(self):
+        self.more_data = True
         # noinspection PyAttributeOutsideInit
         with ProcessPoolExecutor(max_workers=7) as executor:
             games = get_games_from_all_files(self.config)
@@ -143,7 +144,9 @@ class OptimizeWorker:
         self.more_data = False
 
 def load_data_from_game(config, game):
-    return convert_to_cheating_data(get_buffer(config,game))
+    env, buf= get_buffer(config,game)
+    del env
+    return convert_to_cheating_data(buf)
 
 
 def load_data_from_file(filename):
