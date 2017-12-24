@@ -3,7 +3,7 @@ from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from logging import getLogger
-from time import sleep
+from time import sleep, time
 from random import shuffle
 
 import numpy as np
@@ -13,6 +13,7 @@ from chess_zero.config import Config
 from chess_zero.env.chess_env import canon_input_planes, is_black_turn, testeval
 from chess_zero.lib.data_helper import get_game_data_filenames, read_game_data_from_file, get_next_generation_model_dirs
 from chess_zero.lib.model_helper import load_best_model_weight
+from chess_zero.worker.sl import get_buffer, get_games_from_all_files
 
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
@@ -30,7 +31,7 @@ class OptimizeWorker:
         self.loaded_filenames = set()
         self.loaded_data = deque(maxlen=self.config.trainer.dataset_size) # this should just be a ring buffer i.e. queue of length 500,000 in AZ
         self.dataset = deque(),deque(),deque()
-        self.executor = ProcessPoolExecutor(max_workers=config.trainer.cleaning_processes)
+        self.more_data = True
 
     def start(self):
         self.model = self.load_model()
@@ -43,7 +44,7 @@ class OptimizeWorker:
         total_steps = self.config.trainer.start_total_steps
 
         while True:
-            self.fill_queue()
+            self.fill_queue2()
             steps = self.train_epoch(self.config.trainer.epoch_to_checkpoint)
             total_steps += steps
             self.save_current_model()
@@ -79,6 +80,14 @@ class OptimizeWorker:
         config_path = os.path.join(model_dir, rc.next_generation_model_config_filename)
         weight_path = os.path.join(model_dir, rc.next_generation_model_weight_filename)
         self.model.save(config_path, weight_path)
+
+    def fill_queue2(self):
+        a,b,c=self.dataset
+        while len(a) < self.config.trainer.dataset_size and self.more_data:
+            x,y,z= self.get_one_game()
+            a.extend(x)
+            b.extend(y)
+            c.extend(z)
 
     def fill_queue(self):
         futures = deque()
@@ -121,6 +130,19 @@ class OptimizeWorker:
             weight_path = os.path.join(latest_dir, rc.next_generation_model_weight_filename)
             model.load(config_path, weight_path)
         return model
+
+
+    def get_one_game(self):
+        # noinspection PyAttributeOutsideInit
+        with ProcessPoolExecutor(max_workers=7) as executor:
+            games = get_games_from_all_files(self.config)
+            print(games)
+            for res in as_completed([executor.submit(load_data_from_game, self.config, game) for game in games]): #poisoned reference (memleak)
+                yield res.result()
+        self.more_data = False
+
+def load_data_from_game(config, game):
+    return convert_to_cheating_data(get_buffer(config,game))
 
 
 def load_data_from_file(filename):

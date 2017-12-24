@@ -29,7 +29,6 @@ class SupervisedLearningWorker:
         """
         self.config = config
         self.buffer = []
-        self.executor = ProcessPoolExecutor(max_workers=5)
 
     def start(self):
         self.buffer = []
@@ -37,7 +36,7 @@ class SupervisedLearningWorker:
         self.idx = 0
         start_time = time()
         with ProcessPoolExecutor(max_workers=7) as executor:
-            games = self.get_games_from_all_files()
+            games = get_games_from_all_files(self.config)
             for res in as_completed([executor.submit(get_buffer, self.config, game) for game in games]): #poisoned reference (memleak)
                 self.idx += 1
                 env, data = res.result()
@@ -52,15 +51,6 @@ class SupervisedLearningWorker:
         if len(self.buffer) > 0:
             self.flush_buffer()
 
-    def get_games_from_all_files(self):
-        files = find_pgn_files(self.config.resource.play_data_dir)
-        print(files)
-        games = []
-        for filename in files:
-            games.extend(get_games_from_file(filename))
-        print("done reading")
-        return games
-
     def save_data(self, data):
         self.buffer += data
         if self.idx % self.config.play_data.sl_nb_game_in_file == 0:
@@ -74,6 +64,15 @@ class SupervisedLearningWorker:
         thread = Thread(target = write_game_data_to_file, args=(path, self.buffer))
         thread.start()
         self.buffer = []
+
+def get_games_from_all_files(config):
+    files = find_pgn_files(config.resource.play_data_dir)
+    print(files)
+    games = []
+    for filename in files:
+        games.extend(get_games_from_file(filename))
+    print("done reading")
+    return games
 
 
 def get_games_from_file(filename):
