@@ -32,6 +32,7 @@ class OptimizeWorker:
         self.loaded_data = deque(maxlen=self.config.trainer.dataset_size) # this should just be a ring buffer i.e. queue of length 500,000 in AZ
         self.dataset = deque(),deque(),deque()
         self.more_data = True
+        self.games = self.get_all_games()
 
     def start(self):
         self.model = self.load_model()
@@ -84,7 +85,7 @@ class OptimizeWorker:
     def fill_queue2(self):
         a,b,c=self.dataset
         while len(a) < self.config.trainer.dataset_size and self.more_data:
-            x,y,z= self.get_one_game()
+            x,y,z= next(self.games)
             a.extend(x)
             b.extend(y)
             c.extend(z)
@@ -132,7 +133,7 @@ class OptimizeWorker:
         return model
 
 
-    def get_one_game(self):
+    def get_all_games(self):
         # noinspection PyAttributeOutsideInit
         with ProcessPoolExecutor(max_workers=7) as executor:
             games = get_games_from_all_files(self.config)
