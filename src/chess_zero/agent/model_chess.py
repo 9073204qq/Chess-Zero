@@ -74,14 +74,14 @@ class ChessModel:
         mc = self.config.model
         in_x = x
         res_name = "res"+str(index)
-        x = Conv2D(filters=mc.cnn_filter_num[index*2-2], kernel_size=mc.cnn_filter_size[index*2-2], padding="same",
+        x = Conv2D(filters=mc.res_filter_num[index*2-2], kernel_size=mc.res_filter_sizes[index*2-2], padding="same",
                    data_format="channels_first", use_bias=False, kernel_regularizer=l2(mc.l2_reg), 
-                   name=res_name+"_conv1-"+str(mc.cnn_filter_size[index*2-2])+"-"+str(mc.cnn_filter_num[index*2-2]))(x)
+                   name=res_name+"_conv1-"+str(mc.res_filter_sizes[index*2-2])+"-"+str(mc.res_filter_num[index*2-2]))(x)
         x = BatchNormalization(axis=1, name=res_name+"_batchnorm1")(x)
         x = Activation("relu",name=res_name+"_relu1")(x)
-        x = Conv2D(filters=mc.cnn_filter_num[index*2-1], kernel_size=mc.cnn_filter_size[index*2-1], padding="same",
+        x = Conv2D(filters=mc.res_filter_num[index*2-1], kernel_size=mc.res_filter_sizes[index*2-1], padding="same",
                    data_format="channels_first", use_bias=False, kernel_regularizer=l2(mc.l2_reg), 
-                   name=res_name+"_conv2-"+str(mc.cnn_filter_size[index*2-1])+"-"+str(mc.cnn_filter_num[index*2-1]))(x)
+                   name=res_name+"_conv2-"+str(mc.res_filter_sizes[index*2-1])+"-"+str(mc.res_filter_num[index*2-1]))(x)
         x = BatchNormalization(axis=1, name="res"+str(index)+"_batchnorm2")(x)
         x = Add(name=res_name+"_add")([in_x, x])
         x = Activation("relu", name=res_name+"_relu2")(x)
