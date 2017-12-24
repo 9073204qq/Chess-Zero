@@ -10,45 +10,59 @@ logger = getLogger(__name__)
 # noinspection PyArgumentList
 Winner = enum.Enum("Winner", "black white draw")
 
-plane_order = ['K','Q','R','B','N','P','k','q','r','b','n','p']
-ind = {plane_order[i]: i for i in range(12)}
+# input planes
+# noinspection SpellCheckingInspection
+pieces_order = 'KQRBNPkqrbnp' # 12x8x8
+castling_order = 'KQkq'       # 4x8x8
+# fifty-move-rule             # 1x8x8
+# en en_passant               # 1x8x8
+
+ind = {pieces_order[i]: i for i in range(12)}
+
 
 class ChessEnv:
 
     def __init__(self):
         self.board = None
         self.num_halfmoves = 0
-        self.done = False
         self.winner = None  # type: Winner
         self.resigned = False
+        self.result = None
 
     def reset(self):
         self.board = chess.Board()
         self.num_halfmoves = 0
-        self.done = False
         self.winner = None
         self.resigned = False
         return self
 
     def update(self, board):
         self.board = chess.Board(board)
-        self.done = False
         self.winner = None
         self.resigned = False
         return self
 
     @property
-    def whitewon(self):
+    def done(self):
+        return self.winner is not None
+
+    @property
+    def white_won(self):
         return self.winner == Winner.white
+
+    @property
+    def white_to_move(self):
+        return self.board.turn == chess.WHITE
 
     def step(self, action: str, check_over = True):
         """
-        :param int|None action, None is resign
+        :param action:
+        :param check_over:
         :return:
         """
         if check_over and action is None:
-            self._resigned()
-            return self.board, {}
+            self._resign()
+            return
 
         self.board.push_uci(action)
 
@@ -57,127 +71,45 @@ class ChessEnv:
         if check_over and self.board.result(claim_draw=True) != "*":
             self._game_over()
 
-        return self.board, {}
-
     def _game_over(self):
-        self.done = True
         if self.winner is None:
-            result = self.board.result(claim_draw = True)
-            if result == '1-0':
+            self.result = self.board.result(claim_draw = True)
+            if self.result == '1-0':
                 self.winner = Winner.white
-            elif result == '0-1':
+            elif self.result == '0-1':
                 self.winner = Winner.black
             else:
                 self.winner = Winner.draw
 
-    def _resigned(self):
-        self._win_another_player()
-        self._game_over()
+    def _resign(self):
         self.resigned = True
-
-    def _win_another_player(self):
-        if self.board.turn == chess.BLACK:
+        if self.white_to_move: # WHITE RESIGNED!
             self.winner = Winner.black
+            self.result = "0-1"
         else:
             self.winner = Winner.white
+            self.result = "1-0"
 
     def adjudicate(self):
-        self.resigned = False
-        self.done = True
         score = self.testeval(absolute = True)
         if abs(score) < 0.01:
-            self.winner= Winner.draw
+            self.winner = Winner.draw
+            self.result = "1/2-1/2"
         elif score > 0:
             self.winner = Winner.white
+            self.result = "1-0"
         else:
             self.winner = Winner.black
+            self.result = "0-1"
 
     def ending_average_game(self):
-        self.resigned = False
-        self.done = True
         self.winner = Winner.draw
-
-    def testeval(self, absolute = False) -> float:
-        piecevals = {'K': 3, 'Q': 9, 'R': 5,'B': 3.25,'N': 3,'P': 1} # K is always on board....
-        ans = 0.0
-        tot = 0
-        for c in self.board.fen().split(' ')[0]:
-            if not c.isalpha():
-                continue
-            #assert c.upper() in piecevals   
-            if c.isupper():
-                ans += piecevals[c]
-                tot += piecevals[c]
-            else:
-                ans -= piecevals[c.upper()]
-                tot += piecevals[c.upper()]
-        v = ans/tot
-        if not absolute and self.board.turn == chess.BLACK:
-            v = -v
-        assert abs(v) <= 1
-        return np.tanh(v * 3) # arbitrary
-
-    def canonical_input_planes(self):
-        current_player = self.board.fen().split(" ")[1]
-        flip = (current_player == 'b')
-        return self.all_input_planes(flip)
-
-    def all_input_planes(self, flip=False):
-        myboard = maybe_flip_fen(self.board.fen(), flip)
-        current_aux_planes = aux_planes(myboard)
-
-        history_both = self.black_and_white_plane(flip)
-
-        ret = np.vstack((history_both, current_aux_planes))
-        assert ret.shape == (101, 8, 8)
-        return ret
-
-    def check_current_planes(self, planes):
-        parts = np.split(planes,[96,5])
-        hist_both = np.asarray(np.split(parts[0],8)) # 8 histories
-        cur = hist_both[0]
-        assert cur.shape == (12, 8, 8)
-        fakefen = ["1"] * 64
-        for i in range(12):
-            for rank in range(8):
-                for file in range(8):
-                    if cur[i][rank][file] == 1:
-                        assert fakefen[rank * 8 + file] == '1'
-                        fakefen[rank * 8 + file] = plane_order[i]
-
-        realfen = self.board.fen()
-        if self.board.turn == chess.BLACK:
-            realfen = maybe_flip_fen(realfen, flip=True)
-        return "".join(fakefen) == replace_tags_board(realfen)
-
-    def black_and_white_plane(self, flip = False):
-        # flip = True applies the flip + invert color invariant transformation
-
-        history_both = []
-        history_moves = []
-
-        # history planes
-        for i in range(8):
-            board_fen = maybe_flip_fen(self.board.fen(),flip)
-            my_planes = to_planes(fen = board_fen)
-            history_both.extend(my_planes)
-            if len(self.board.move_stack) > 0:
-                history_moves.append(self.board.pop())
-
-        for mov in reversed(history_moves):
-            self.board.push(mov)
-            
-        history_both = np.asarray(history_both)
-        assert history_both.shape == (96, 8, 8)
-        return history_both
+        self.result = "1/2-1/2"
 
     def copy(self):
         env = copy.copy(self)
         env.board = copy.copy(self.board)
         return env
-
-    def replace_tags(self):
-        return replace_tags_board(self.board.fen())
 
     def render(self):
         print("\n")
@@ -198,8 +130,93 @@ class ChessEnv:
                 return mov.uci()
         return None
 
+    def replace_tags(self):
+        return replace_tags_board(self.board.fen())
+
+    def canonical_input_planes(self):
+        return canon_input_planes(self.board.fen())
+
+    def testeval(self, absolute=False) -> float:
+        return testeval(self.board.fen(), absolute)
+
+
+def testeval(fen, absolute = False) -> float:
+    piece_vals = {'K': 3, 'Q': 14, 'R': 5, 'B': 3.25, 'N': 3, 'P': 1} # somehow it doesn't know how to keep its queen
+    ans = 0.0
+    tot = 0
+    for c in fen.split(' ')[0]:
+        if not c.isalpha():
+            continue
+
+        if c.isupper():
+            ans += piece_vals[c]
+            tot += piece_vals[c]
+        else:
+            ans -= piece_vals[c.upper()]
+            tot += piece_vals[c.upper()]
+    v = ans/tot
+    if not absolute and is_black_turn(fen):
+        v = -v
+    assert abs(v) < 1
+    return np.tanh(v * 3) # arbitrary
+
+
+def check_current_planes(realfen, planes):
+    cur = planes[0:12]
+    assert cur.shape == (12, 8, 8)
+    fakefen = ["1"] * 64
+    for i in range(12):
+        for rank in range(8):
+            for file in range(8):
+                if cur[i][rank][file] == 1:
+                    assert fakefen[rank * 8 + file] == '1'
+                    fakefen[rank * 8 + file] = pieces_order[i]
+
+    castling = planes[12:16]
+    fiftymove = planes[16][0][0]
+    ep = planes[17]
+
+    castlingstring = ""
+    for i in range(4):
+        if castling[i][0][0] == 1:
+            castlingstring += castling_order[i]
+
+    if len(castlingstring) == 0:
+        castlingstring = '-'
+
+    epstr = "-"
+    for rank in range(8):
+        for file in range(8):
+            if ep[rank][file] == 1:
+                epstr = coord_to_alg((rank, file))
+
+    realfen = maybe_flip_fen(realfen, flip=is_black_turn(realfen))
+    realparts = realfen.split(' ')
+    assert realparts[1] == 'w'
+    assert realparts[2] == castlingstring
+    assert realparts[3] == epstr
+    assert int(realparts[4]) == fiftymove
+    # realparts[5] is the fifty-move clock, discard that
+    return "".join(fakefen) == replace_tags_board(realfen)
+
+
+def canon_input_planes(fen):
+    fen = maybe_flip_fen(fen, is_black_turn(fen))
+    return all_input_planes(fen)
+
+
+def all_input_planes(fen):
+    current_aux_planes = aux_planes(fen)
+
+    history_both = to_planes(fen)
+
+    ret = np.vstack((history_both, current_aux_planes))
+    assert ret.shape == (18, 8, 8)
+    return ret
+
+
 def maybe_flip_fen(fen, flip = False):
-    if flip == False:
+    if not flip:
         return fen
     foo = fen.split(' ')
     rows = foo[0].split('/')
@@ -209,28 +226,70 @@ def maybe_flip_fen(fen, flip = False):
         return a
     def swapall(aa):
         return "".join([swapcase(a) for a in aa])
-    return "/".join( [swapall(row) for row in reversed(rows)] ) \
-        + " " + ('w' if foo[1]=='b' else 'b') \
-        + " " + "".join( sorted( swapall(foo[2]) ) ) \
+    return "/".join([swapall(row) for row in reversed(rows)]) \
+        + " " + ('w' if foo[1] == 'b' else 'b') \
+        + " " + "".join(sorted(swapall(foo[2]))) \
         + " " + foo[3] + " " + foo[4] + " " + foo[5]
+
 
 def aux_planes(fen):
     foo = fen.split(' ')
-    castling_planes =     [ np.full((8,8), int('K' in foo[2]), dtype=np.float32) ]
-    castling_planes.append( np.full((8,8), int('Q' in foo[2]), dtype=np.float32))
-    castling_planes.append( np.full((8,8), int('k' in foo[2]), dtype=np.float32))
-    castling_planes.append( np.full((8,8), int('q' in foo[2]), dtype=np.float32))
-    castling_planes = np.asarray(castling_planes, dtype=np.float32)
-    assert castling_planes.shape == (4,8,8)
-    fifty_move_number = foo[4]
-    fifty_move_plane = [np.full((8, 8), int(fifty_move_number), dtype=np.float32)]
-    ret = np.vstack((castling_planes, fifty_move_plane))
-    assert ret.shape == (5,8,8)
+
+    en_passant = np.zeros((8, 8), dtype=np.float32)
+    if foo[3] != '-':
+        eps = alg_to_coord(foo[3])
+        en_passant[eps[0]][eps[1]] = 1
+
+    fifty_move_count = int(foo[4])
+    fifty_move = np.full((8, 8), fifty_move_count, dtype=np.float32)
+
+    castling = foo[2]
+    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=np.float32),
+                        np.full((8, 8), int('Q' in castling), dtype=np.float32),
+                        np.full((8, 8), int('k' in castling), dtype=np.float32),
+                        np.full((8, 8), int('q' in castling), dtype=np.float32),
+                        fifty_move,
+                        en_passant]
+
+    ret = np.asarray(auxiliary_planes, dtype=np.float32)
+    assert ret.shape == (6, 8, 8)
     return ret
+
+# FEN board is like this:
+# a8 b8 .. h8
+# a7 b7 .. h7
+# .. .. .. ..
+# a1 b1 .. h1
+# 
+# FEN string is like this:
+#  0  1 ..  7
+#  8  9 .. 15
+# .. .. .. ..
+# 56 57 .. 63
+
+# my planes are like this:
+# 00 01 .. 07
+# 10 11 .. 17
+# .. .. .. ..
+# 70 71 .. 77
+#
+
+
+def alg_to_coord(alg):
+    rank = 8 - int(alg[1])        # 0-7
+    file = ord(alg[0]) - ord('a') # 0-7
+    return rank, file
+
+
+def coord_to_alg(coord):
+    letter = chr(ord('a') + coord[1])
+    number = str(8 - coord[0])
+    return letter + number
+
 
 def to_planes(fen):
     board_state = replace_tags_board(fen)
-    pieces_both = np.zeros(shape = (12, 8, 8), dtype=np.float32)
+    pieces_both = np.zeros(shape=(12, 8, 8), dtype=np.float32)
     for rank in range(8):
         for file in range(8):
             v = board_state[rank * 8 + file]
@@ -238,6 +297,7 @@ def to_planes(fen):
                 pieces_both[ind[v]][rank][file] = 1
     assert pieces_both.shape == (12, 8, 8)
     return pieces_both
+
 
 def replace_tags_board(board_san):
     board_san = board_san.split(" ")[0]
@@ -249,3 +309,7 @@ def replace_tags_board(board_san):
     board_san = board_san.replace("7", "1111111")
     board_san = board_san.replace("8", "11111111")
     return board_san.replace("/", "")
+
+
+def is_black_turn(fen):
+    return fen.split(" ")[1] == 'b'

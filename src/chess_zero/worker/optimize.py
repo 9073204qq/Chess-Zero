@@ -1,29 +1,25 @@
 import os
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from logging import getLogger
 from time import sleep
-import random
-
-from profilehooks import profile
+from random import shuffle
 
 import numpy as np
 
 from chess_zero.agent.model_chess import ChessModel
 from chess_zero.config import Config
-from chess_zero.lib import tf_util
-from chess_zero.lib.data_helper import get_game_data_filenames, read_game_data_from_file, \
-    get_next_generation_model_dirs
+from chess_zero.env.chess_env import canon_input_planes, is_black_turn, testeval
+from chess_zero.lib.data_helper import get_game_data_filenames, read_game_data_from_file, get_next_generation_model_dirs
 from chess_zero.lib.model_helper import load_best_model_weight
-from chess_zero.env.chess_env import ChessEnv
-import chess
-from concurrent.futures import ProcessPoolExecutor
-from collections import deque
 
+from keras.optimizers import Adam
+from keras.callbacks import TensorBoard
 logger = getLogger(__name__)
 
 
 def start(config: Config):
-    tf_util.set_session_config(config.trainer.vram_frac)
     return OptimizeWorker(config).start()
 
 
@@ -32,9 +28,8 @@ class OptimizeWorker:
         self.config = config
         self.model = None  # type: ChessModel
         self.loaded_filenames = set()
-        self.loaded_data = deque() # this should just be a ring buffer i.e. queue of length 500,000 in AZ
-        self.dataset = None
-        self.optimizer = None
+        self.loaded_data = deque(maxlen=self.config.trainer.dataset_size) # this should just be a ring buffer i.e. queue of length 500,000 in AZ
+        self.dataset = deque(),deque(),deque()
         self.executor = ProcessPoolExecutor(max_workers=config.trainer.cleaning_processes)
 
     def start(self):
@@ -43,41 +38,38 @@ class OptimizeWorker:
 
     def training(self):
         self.compile_model()
-        last_load_data_step = last_save_step = total_steps = self.config.trainer.start_total_steps
-        self.load_play_data()
+        self.filenames = deque(get_game_data_filenames(self.config.resource))
+        shuffle(self.filenames)
+        total_steps = self.config.trainer.start_total_steps
 
         while True:
-            if self.dataset_size < self.config.trainer.min_data_size_to_learn:
-                logger.info(f"dataset_size={self.dataset_size} is less than {self.config.trainer.min_data_size_to_learn}")
-                sleep(60)
-                self.load_play_data()
-                continue
-            #self.update_learning_rate(total_steps)
+            self.fill_queue()
             steps = self.train_epoch(self.config.trainer.epoch_to_checkpoint)
             total_steps += steps
-            #if last_save_step + self.config.trainer.save_model_steps < total_steps:
             self.save_current_model()
-            last_save_step = total_steps
-
-            # if last_load_data_step + self.config.trainer.load_data_steps < total_steps:
-            #     self.load_play_data()
-            #     last_load_data_step = total_steps
+            a, b, c = self.dataset
+            while len(a) > self.config.trainer.dataset_size/2:
+                a.popleft()
+                b.popleft()
+                c.popleft()
 
     def train_epoch(self, epochs):
         tc = self.config.trainer
-        state_ary, policy_ary, value_ary = self.dataset
+        state_ary, policy_ary, value_ary = self.collect_all_loaded_data()
+        tensorboard_cb = TensorBoard(log_dir="./logs", batch_size=tc.batch_size, histogram_freq=1)
         self.model.model.fit(state_ary, [policy_ary, value_ary],
                              batch_size=tc.batch_size,
                              epochs=epochs,
-                             shuffle=True)
+                             shuffle=True,
+                             validation_split=0.02,
+                             callbacks=[tensorboard_cb])
         steps = (state_ary.shape[0] // tc.batch_size) * epochs
         return steps
 
     def compile_model(self):
-        from keras.optimizers import SGD, Adam
-        self.optimizer = Adam() #SGD(lr=2e-1, momentum=0.9) # Adam better?
+        opt = Adam()
         losses = ['categorical_crossentropy', 'mean_squared_error'] # avoid overfit for supervised 
-        self.model.model.compile(optimizer=self.optimizer, loss=losses, loss_weights=self.config.trainer.loss_weights)
+        self.model.model.compile(optimizer=opt, loss=losses, loss_weights=self.config.trainer.loss_weights)
 
     def save_current_model(self):
         rc = self.config.resource
@@ -88,39 +80,32 @@ class OptimizeWorker:
         weight_path = os.path.join(model_dir, rc.next_generation_model_weight_filename)
         self.model.save(config_path, weight_path)
 
-    def load_play_data(self):
-        filenames = get_game_data_filenames(self.config.resource)
-        updated = False
-        for filename in filenames:
-            if filename in self.loaded_filenames:
-                continue
-            self.load_data_from_file(filename)
-            updated = True
-
-        # for filename in (self.loaded_filenames - set(filenames)):
-        #     self.unload_data_of_file(filename)
-        #     updated = True
-
-        if updated:
-            logger.debug("updating training dataset")
-            self.dataset = self.collect_all_loaded_data()
+    def fill_queue(self):
+        futures = deque()
+        with ProcessPoolExecutor(max_workers=self.config.trainer.cleaning_processes) as executor:
+            for _ in range(self.config.trainer.cleaning_processes):
+                if len(self.filenames) == 0:
+                    break
+                filename = self.filenames.popleft()
+                logger.debug(f"loading data from {filename}")
+                futures.append(executor.submit(load_data_from_file,filename))
+            while futures and len(self.dataset[0]) < self.config.trainer.dataset_size:
+                for x,y in zip(self.dataset,futures.popleft().result()):
+                    x.extend(y)
+                if len(self.filenames) > 0:
+                    filename = self.filenames.popleft()
+                    logger.debug(f"loading data from {filename}")
+                    futures.append(executor.submit(load_data_from_file,filename))
 
     def collect_all_loaded_data(self):
-        state_ary, policy_ary, value_ary = [], [], []
-        while self.loaded_data:
-            s, p, v = self.loaded_data.popleft().result()
-            state_ary.append(s)
-            policy_ary.append(p)
-            value_ary.append(v)
+        state_ary,policy_ary,value_ary=self.dataset
 
-        state_ary = np.concatenate(state_ary)
-        policy_ary = np.concatenate(policy_ary)
-        value_ary = np.concatenate(value_ary)
-        return state_ary, policy_ary, value_ary
-
+        state_ary1 = np.asarray(state_ary, dtype=np.float32)
+        policy_ary1 = np.asarray(policy_ary, dtype=np.float32)
+        value_ary1 = np.asarray(value_ary, dtype=np.float32)
+        return state_ary1, policy_ary1, value_ary1
 
     def load_model(self):
-        from chess_zero.agent.model_chess import ChessModel
         model = ChessModel(self.config)
         rc = self.config.resource
 
@@ -137,25 +122,11 @@ class OptimizeWorker:
             model.load(config_path, weight_path)
         return model
 
-    def load_data_from_file(self, filename):
-        # try:
-        logger.debug(f"loading data from {filename}")
-        data = read_game_data_from_file(filename)
-        self.loaded_data.append( self.executor.submit(convert_to_cheating_data, data) )### HEEEERE, use with SL
-        self.loaded_filenames.add(filename)
-        # except Exception as e:
-        #     logger.warning(str(e))
 
-    @property
-    def dataset_size(self):
-        if self.dataset is None:
-            return 0
-        return len(self.dataset[0])
-    # def unload_data_of_file(self, filename):
-    #     logger.debug(f"removing data about {filename} from training set")
-    #     self.loaded_filenames.remove(filename)
-    #     if filename in self.loaded_data:
-    #         del self.loaded_data[filename]
+def load_data_from_file(filename):
+    data = read_game_data_from_file(filename)
+    return convert_to_cheating_data(data)
+
 
 def convert_to_cheating_data(data):
     """
@@ -165,44 +136,19 @@ def convert_to_cheating_data(data):
     state_list = []
     policy_list = []
     value_list = []
-    env = ChessEnv().reset()
     for state_fen, policy, value in data:
-        move_number = int(state_fen.split(' ')[5])
-        # f2 = maybe_flip_fen(maybe_flip_fen(state_fen,True),True)
-        # assert state_fen == f2
-        next_move = env.deltamove(state_fen)
-        if next_move == None: # new game!
-            assert state_fen == chess.STARTING_FEN
-            env.reset()
-        else:
-            env.step(next_move, False)
 
+        state_planes = canon_input_planes(state_fen)
 
-        state_planes = env.canonical_input_planes()
-        assert env.check_current_planes(state_planes)
-
-        side_to_move = state_fen.split(" ")[1]
-        if side_to_move == 'b':
-            #assert np.sum(policy) == 0
+        if is_black_turn(state_fen):
             policy = Config.flip_policy(policy)
-        else:
-            #assert abs(np.sum(policy) - 1) < 1e-8
-            pass
 
-
-        # if np.sum(policy) != 0:
-        #     policy /= np.sum(policy)
-
-        #assert abs(np.sum(policy) - 1) < 1e-8
-
-        assert len(policy) == 1968
-        assert state_planes.dtype == np.float32
-        
-        value_certainty = min(15, move_number)/15 # reduces the noise of the opening... plz train faster
-        SL_value = value*value_certainty + env.testeval()*(1-value_certainty)
+        move_number = int(state_fen.split(' ')[5])
+        value_certainty = min(5, move_number)/5 # reduces the noise of the opening... plz train faster
+        sl_value = value*value_certainty + testeval(state_fen, False)*(1-value_certainty)
 
         state_list.append(state_planes)
         policy_list.append(policy)
-        value_list.append(SL_value)
+        value_list.append(sl_value)
 
-    return np.array(state_list, dtype=np.float32), np.array(policy_list, dtype=np.float32), np.array(value_list, dtype=np.float32)
+    return np.asarray(state_list, dtype=np.float32), np.asarray(policy_list, dtype=np.float32), np.asarray(value_list, dtype=np.float32)
