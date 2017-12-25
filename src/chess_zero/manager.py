@@ -7,7 +7,7 @@ from .config import Config
 
 logger = getLogger(__name__)
 
-CMD_LIST = ['self', 'opt', 'eval', 'sl', 'uci']
+CMD_LIST = ['self', 'opt', 'eval', 'sl', 'uci', 'new']
 
 
 def create_parser():
@@ -55,3 +55,8 @@ def start():
     elif args.cmd == 'uci':
         from .play_game import uci
         return uci.start(config)
+    elif args.cmd == 'new':
+        model = ChessModel(config)
+        model.build()
+        save_as_best_model(model)
+        return model

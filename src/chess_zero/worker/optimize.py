@@ -73,7 +73,7 @@ class OptimizeWorker:
 
     def compile_model(self):
         #opt = SGD(lr=0.01)
-        opt = Adam(epsilon=1e-6)
+        opt = Adam(epsilon=1e-5)
         losses = [cross_entropy_with_logits, 'mean_squared_error'] # avoid overfit for supervised 
         self.model.model.compile(optimizer=opt, loss=losses, loss_weights=self.config.trainer.loss_weights)
 

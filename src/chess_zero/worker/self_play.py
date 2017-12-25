@@ -23,20 +23,6 @@ logger = getLogger(__name__)
 def start(config: Config):
     return SelfPlayWorker(config).start()
 
-    return [f.result() for f in futures]
-
-def load_model(config) -> ChessModel:
-    from chess_zero.agent.model_chess import ChessModel
-    model = ChessModel(config)
-    if config.opts.new or not load_best_model_weight(model):
-        model.build()
-        save_as_best_model(model)
-        model._make_predict_function()
-    return model
-
-def startone(config, p_q):
-    SelfPlayWorker(config, p_q).start()
-
 # noinspection PyAttributeOutsideInit
 class SelfPlayWorker:
     def __init__(self, config: Config):
@@ -76,9 +62,7 @@ class SelfPlayWorker:
 
     def load_model(self):
         model = ChessModel(self.config)
-        if self.config.opts.new or not load_best_model_weight(model):
-            model.build()
-            save_as_best_model(model)
+        load_best_model_weight(model)
         return model
 
     def flush_buffer(self):
