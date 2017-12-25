@@ -235,23 +235,23 @@ def maybe_flip_fen(fen, flip = False):
 def aux_planes(fen):
     foo = fen.split(' ')
 
-    en_passant = np.zeros((8, 8), dtype=np.float32)
+    en_passant = np.zeros((8, 8), dtype=np.float16)
     if foo[3] != '-':
         eps = alg_to_coord(foo[3])
         en_passant[eps[0]][eps[1]] = 1
 
     fifty_move_count = int(foo[4])
-    fifty_move = np.full((8, 8), fifty_move_count, dtype=np.float32)
+    fifty_move = np.full((8, 8), fifty_move_count, dtype=np.float16)
 
     castling = foo[2]
-    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=np.float32),
-                        np.full((8, 8), int('Q' in castling), dtype=np.float32),
-                        np.full((8, 8), int('k' in castling), dtype=np.float32),
-                        np.full((8, 8), int('q' in castling), dtype=np.float32),
+    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=np.float16),
+                        np.full((8, 8), int('Q' in castling), dtype=np.float16),
+                        np.full((8, 8), int('k' in castling), dtype=np.float16),
+                        np.full((8, 8), int('q' in castling), dtype=np.float16),
                         fifty_move,
                         en_passant]
 
-    ret = np.asarray(auxiliary_planes, dtype=np.float32)
+    ret = np.asarray(auxiliary_planes, dtype=np.float16)
     assert ret.shape == (6, 8, 8)
     return ret
 
@@ -289,7 +289,7 @@ def coord_to_alg(coord):
 
 def to_planes(fen):
     board_state = replace_tags_board(fen)
-    pieces_both = np.zeros(shape=(12, 8, 8), dtype=np.float32)
+    pieces_both = np.zeros(shape=(12, 8, 8), dtype=np.float16)
     for rank in range(8):
         for file in range(8):
             v = board_state[rank * 8 + file]

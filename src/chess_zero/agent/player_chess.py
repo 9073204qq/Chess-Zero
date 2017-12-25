@@ -169,9 +169,9 @@ class ChessPlayer:
     def predict(self, state_planes):
         pipe = self.pipe_pool.pop()
         pipe.send(state_planes)
-        ret = pipe.recv()
+        policy, value = pipe.recv()
         self.pipe_pool.append(pipe)
-        return ret
+        return softmax(policy), float(value)
 
     #@profile
     def select_action_q_and_u(self, env, is_root_node) -> chess.Move:
@@ -259,3 +259,8 @@ class ChessPlayer:
 def state_key(env: ChessEnv) -> str:
     fen = env.board.fen().rsplit(' ', 1) # drop the move clock
     return fen[0]
+
+def softmax(logits):
+    ret = np.exp(logits,dtype=np.float32)
+    ret /= np.sum(ret)
+    return ret

@@ -15,10 +15,10 @@ from chess_zero.lib.data_helper import get_game_data_filenames, read_game_data_f
 from chess_zero.lib.model_helper import load_best_model_weight
 from chess_zero.worker.sl import get_buffer, get_games_from_all_files
 
-from keras.optimizers import Adam
+from keras.optimizers import Adam,SGD
 from keras.callbacks import TensorBoard
 logger = getLogger(__name__)
-
+precision = np.float16
 
 def start(config: Config):
     return OptimizeWorker(config).start()
@@ -29,8 +29,8 @@ class OptimizeWorker:
         self.config = config
         self.model = None  # type: ChessModel
         self.loaded_filenames = set()
-        self.loaded_data = deque(maxlen=self.config.trainer.dataset_size) # this should just be a ring buffer i.e. queue of length 500,000 in AZ
-        self.dataset = deque(),deque(),deque()
+        self.dataset_size = self.config.trainer.dataset_size
+        self.dataset = deque(maxlen=self.dataset_size), deque(maxlen=self.dataset_size), deque(maxlen=self.dataset_size)
         self.more_data = True
         self.games = self.get_all_games()
 
@@ -44,13 +44,16 @@ class OptimizeWorker:
         shuffle(self.filenames)
         total_steps = self.config.trainer.start_total_steps
 
-        while True:
+        while self.more_data:
             self.fill_queue2()
             steps = self.train_epoch(self.config.trainer.epoch_to_checkpoint)
             total_steps += steps
             self.save_current_model()
             a, b, c = self.dataset
-            while len(a) > self.config.trainer.dataset_size/2:
+            assert len(a)==self.dataset_size or not self.more_data
+            for _ in range(self.config.trainer.dataset_size//2):
+                if len(a) == 0:
+                    break
                 a.popleft()
                 b.popleft()
                 c.popleft()
@@ -58,19 +61,20 @@ class OptimizeWorker:
     def train_epoch(self, epochs):
         tc = self.config.trainer
         state_ary, policy_ary, value_ary = self.collect_all_loaded_data()
-        tensorboard_cb = TensorBoard(log_dir="./logs", batch_size=tc.batch_size, histogram_freq=1)
+        #tensorboard_cb = TensorBoard(log_dir="./logs", batch_size=tc.batch_size, histogram_freq=1)
         self.model.model.fit(state_ary, [policy_ary, value_ary],
                              batch_size=tc.batch_size,
                              epochs=epochs,
                              shuffle=True,
-                             validation_split=0.02,
-                             callbacks=[tensorboard_cb])
+                             validation_split=0.02)
+                             #callbacks=[tensorboard_cb])
         steps = (state_ary.shape[0] // tc.batch_size) * epochs
         return steps
 
     def compile_model(self):
-        opt = Adam()
-        losses = ['categorical_crossentropy', 'mean_squared_error'] # avoid overfit for supervised 
+        #opt = SGD(lr=0.01)
+        opt = Adam(epsilon=1e-6)
+        losses = [cross_entropy_with_logits, 'mean_squared_error'] # avoid overfit for supervised 
         self.model.model.compile(optimizer=opt, loss=losses, loss_weights=self.config.trainer.loss_weights)
 
     def save_current_model(self):
@@ -110,9 +114,9 @@ class OptimizeWorker:
     def collect_all_loaded_data(self):
         state_ary,policy_ary,value_ary=self.dataset
 
-        state_ary1 = np.asarray(state_ary, dtype=np.float32)
-        policy_ary1 = np.asarray(policy_ary, dtype=np.float32)
-        value_ary1 = np.asarray(value_ary, dtype=np.float32)
+        state_ary1 = np.asarray(state_ary, dtype=precision)
+        policy_ary1 = np.asarray(policy_ary, dtype=precision)
+        value_ary1 = np.asarray(value_ary, dtype=precision)
         return state_ary1, policy_ary1, value_ary1
 
     def load_model(self):
@@ -138,9 +142,17 @@ class OptimizeWorker:
         # noinspection PyAttributeOutsideInit
         with ProcessPoolExecutor(max_workers=7) as executor:
             games = get_games_from_all_files(self.config)
+            shuffle(games)
             for res in as_completed([executor.submit(load_data_from_game, self.config, game) for game in games]): #poisoned reference (memleak)
                 yield res.result()
         self.more_data = False
+
+def cross_entropy_with_logits(y_true, y_pred_logits):
+    import tensorflow as tf
+    # tst = y_true*y_pred_logits
+    # tf.Assert(tst.shape==())
+    return tf.reduce_mean(tf.reduce_sum(y_true,axis=1)*tf.reduce_logsumexp(y_pred_logits,axis=1)
+     - tf.reduce_sum(y_true*y_pred_logits,axis=1))
 
 def load_data_from_game(config, game):
     env, buf= get_buffer(config,game)
@@ -169,11 +181,11 @@ def convert_to_cheating_data(data):
             policy = Config.flip_policy(policy)
 
         move_number = int(state_fen.split(' ')[5])
-        value_certainty = min(5, move_number)/5 # reduces the noise of the opening... plz train faster
+        value_certainty = min(15, move_number)/15 # reduces the noise of the opening... plz train faster
         sl_value = value*value_certainty + testeval(state_fen, False)*(1-value_certainty)
 
         state_list.append(state_planes)
         policy_list.append(policy)
         value_list.append(sl_value)
 
-    return np.asarray(state_list, dtype=np.float32), np.asarray(policy_list, dtype=np.float32), np.asarray(value_list, dtype=np.float32)
+    return np.asarray(state_list, dtype=precision), np.asarray(policy_list, dtype=precision), np.asarray(value_list, dtype=precision)

@@ -31,6 +31,7 @@ def load_model(config) -> ChessModel:
     if config.opts.new or not load_best_model_weight(model):
         model.build()
         save_as_best_model(model)
+        model._make_predict_function()
     return model
 
 def startone(config, p_q):

@@ -107,10 +107,11 @@ def get_buffer(config, game) -> (ChessEnv, list):
         actions.append(game.move.uci())
     k = 0
     while not env.done and k < len(actions):
+        progress_weight = 1#k*2/len(actions)
         if env.white_to_move:
-            action = white.sl_action(env.observation, actions[k], weight=white_weight) #ignore=True
+            action = white.sl_action(env.observation, actions[k], weight=white_weight*progress_weight) #ignore=True
         else:
-            action = black.sl_action(env.observation, actions[k], weight=black_weight) #ignore=True
+            action = black.sl_action(env.observation, actions[k], weight=black_weight*progress_weight) #ignore=True
         env.step(action, False)
         k += 1
 

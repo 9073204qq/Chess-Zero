@@ -7,7 +7,7 @@ class PlayWithHumanConfig:
         self.simulation_num_per_move = 1200
         self.threads_multiplier = 2
         self.c_puct = 1 # lower  = prefer mean action value
-        self.noise_eps = 0
+        self.noise_eps = 0.1
         self.tau_decay_rate = 0  # start deterministic mode
         self.resign_threshold = None
 
