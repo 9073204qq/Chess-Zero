@@ -3,10 +3,10 @@ from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from logging import getLogger
-from time import sleep, time
 from random import shuffle
 
 import numpy as np
+from keras.optimizers import Adam
 
 from chess_zero.agent.model_chess import ChessModel
 from chess_zero.config import Config
@@ -15,8 +15,6 @@ from chess_zero.lib.data_helper import get_game_data_filenames, read_game_data_f
 from chess_zero.lib.model_helper import load_best_model_weight
 from chess_zero.worker.sl import get_buffer, get_games_from_all_files
 
-from keras.optimizers import Adam,SGD
-from keras.callbacks import TensorBoard
 logger = getLogger(__name__)
 precision = np.float16
 

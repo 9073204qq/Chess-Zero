@@ -21,6 +21,8 @@ logger = getLogger(__name__)
 
 initializer = "glorot_normal"
 
+
+# noinspection PyBroadException
 class ChessModel:
     def __init__(self, config: Config):
         self.config = config
@@ -144,6 +146,7 @@ class ChessModel:
         mc = self.config.model
         resources = self.config.resource
         if mc.distributed and config_path == resources.model_best_config_path:
+            # noinspection PyBroadException
             try:
                 logger.debug("saving model to server")
                 ftp_connection = ftplib.FTP(resources.model_best_distributed_ftp_server,

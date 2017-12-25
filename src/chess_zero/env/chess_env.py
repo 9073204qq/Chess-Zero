@@ -18,7 +18,7 @@ castling_order = 'KQkq'       # 4x8x8
 # en en_passant               # 1x8x8
 
 ind = {pieces_order[i]: i for i in range(12)}
-
+precision = np.float16
 
 class ChessEnv:
 
@@ -235,23 +235,23 @@ def maybe_flip_fen(fen, flip = False):
 def aux_planes(fen):
     foo = fen.split(' ')
 
-    en_passant = np.zeros((8, 8), dtype=np.float16)
+    en_passant = np.zeros((8, 8), dtype=precision)
     if foo[3] != '-':
         eps = alg_to_coord(foo[3])
         en_passant[eps[0]][eps[1]] = 1
 
     fifty_move_count = int(foo[4])
-    fifty_move = np.full((8, 8), fifty_move_count, dtype=np.float16)
+    fifty_move = np.full((8, 8), fifty_move_count, dtype=precision)
 
     castling = foo[2]
-    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=np.float16),
-                        np.full((8, 8), int('Q' in castling), dtype=np.float16),
-                        np.full((8, 8), int('k' in castling), dtype=np.float16),
-                        np.full((8, 8), int('q' in castling), dtype=np.float16),
+    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=precision),
+                        np.full((8, 8), int('Q' in castling), dtype=precision),
+                        np.full((8, 8), int('k' in castling), dtype=precision),
+                        np.full((8, 8), int('q' in castling), dtype=precision),
                         fifty_move,
                         en_passant]
 
-    ret = np.asarray(auxiliary_planes, dtype=np.float16)
+    ret = np.asarray(auxiliary_planes, dtype=precision)
     assert ret.shape == (6, 8, 8)
     return ret
 
@@ -289,7 +289,7 @@ def coord_to_alg(coord):
 
 def to_planes(fen):
     board_state = replace_tags_board(fen)
-    pieces_both = np.zeros(shape=(12, 8, 8), dtype=np.float16)
+    pieces_both = np.zeros(shape=(12, 8, 8), dtype=precision)
     for rank in range(8):
         for file in range(8):
             v = board_state[rank * 8 + file]

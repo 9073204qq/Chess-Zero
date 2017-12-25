@@ -2,6 +2,8 @@ import argparse
 
 from logging import getLogger,disable
 
+from chess_zero.agent.model_chess import ChessModel
+from chess_zero.lib.model_helper import save_as_best_model
 from .lib.logger import setup_logger
 from .config import Config
 

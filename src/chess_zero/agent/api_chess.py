@@ -4,9 +4,7 @@ from threading import Thread
 import numpy as np
 
 from chess_zero.config import Config
-from multiprocessing import Manager
-from threading import Thread
-import numpy as np
+
 
 class ChessModelAPI:
     # noinspection PyUnusedLocal

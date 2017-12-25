@@ -1,3 +1,4 @@
+ujson
 tensorflow-gpu
 keras
 profilehooks

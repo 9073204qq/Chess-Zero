@@ -1,14 +1,12 @@
 import os
-import json
+import ujson
 from datetime import datetime
 from glob import glob
 from logging import getLogger
-import ujson
-import chess
-import pyperclip
 
 import chess
 import pyperclip
+
 from chess_zero.config import ResourceConfig
 
 logger = getLogger(__name__)

@@ -68,11 +68,6 @@ def flipped_uci_labels():
 
     return [repl(x) for x in create_uci_labels()]
 
-def flipped_uci_labels():
-    def repl(x):
-        return "".join([(str(9-int(a)) if a.isdigit() else a) for a in x])
-        
-    return  [repl(x) for x in create_uci_labels()]
 
 def create_uci_labels():
     labels_array = []
