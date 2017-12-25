@@ -102,12 +102,14 @@ def create_uci_labels():
                 labels_array.append(l + '7' + l_r + '8' + p)
     return labels_array
 
+import chess
 
 class Config:
     labels = create_uci_labels()
     n_labels = int(len(labels))
     flipped_labels = flipped_uci_labels()
     unflipped_index = None
+    move_lookup = {chess.Move.from_uci(move): i for move, i in zip(self.labels, range(self.n_labels))}
 
     def __init__(self, config_type="mini"):
         self.opts = Options()

@@ -36,7 +36,7 @@ class SupervisedLearningWorker:
         self.idx = 0
         start_time = time()
         with ProcessPoolExecutor(max_workers=7) as executor:
-            games = get_games_from_all_files(self.config)
+            games, _ = get_games_from_all_files(self.config)
             for res in as_completed([executor.submit(get_buffer, self.config, game) for game in games]): #poisoned reference (memleak)
                 self.idx += 1
                 env, data = res.result()
@@ -65,17 +65,18 @@ class SupervisedLearningWorker:
         thread.start()
         self.buffer = []
 
-def get_games_from_all_files(config):
+def get_games_from_all_files(config) -> list:
     files = find_pgn_files(config.resource.play_data_dir)
     print(files)
     games = []
     for filename in files:
-        games.extend(get_games_from_file(filename))
+        g = get_games_from_file(filename)
+        games.extend(g)
     print("done reading")
     return games
 
 
-def get_games_from_file(filename):
+def get_games_from_file(filename) -> list:
     pgn = open(filename, errors='ignore')
     offsets = list(chess.pgn.scan_offsets(pgn))
     n = len(offsets)
@@ -83,7 +84,8 @@ def get_games_from_file(filename):
     games = []
     for offset in offsets:
         pgn.seek(offset)
-        games.append(chess.pgn.read_game(pgn))
+        game = chess.pgn.read_game(pgn)
+        games.append(game)
     return games
 
 
@@ -94,26 +96,23 @@ def clip_elo_policy(config, elo):
 
 def get_buffer(config, game) -> (ChessEnv, list):
     env = ChessEnv().reset()
-    white = ChessPlayer(config, dummy=True)
-    black = ChessPlayer(config, dummy=True)
+    # white = ChessPlayer(config, dummy=True)
+    # black = ChessPlayer(config, dummy=True)
     result = game.headers["Result"]
     white_elo, black_elo = int(game.headers["WhiteElo"]), int(game.headers["BlackElo"])
     white_weight = clip_elo_policy(config, white_elo)
     black_weight = clip_elo_policy(config, black_elo)
-    
-    actions = []
-    while not game.is_end():
-        game = game.variation(0)
-        actions.append(game.move.uci())
-    k = 0
-    while not env.done and k < len(actions):
-        progress_weight = 1#k*2/len(actions)
+    white_data, black_data = [], []
+
+    for action in game.main_line():
+        if env.done:
+            break
+        #progress_weight = 1#k*2/len(actions)
         if env.white_to_move:
-            action = white.sl_action(env.observation, actions[k], weight=white_weight*progress_weight) #ignore=True
+            white_data.append(sl_action(config, env.observation, action, white_weight))
         else:
-            action = black.sl_action(env.observation, actions[k], weight=black_weight*progress_weight) #ignore=True
+            black_data.append(sl_action(config, env.observation, action, black_weight))
         env.step(action, False)
-        k += 1
 
     if not env.board.is_game_over() and result != '1/2-1/2':
         env.resigned = True
@@ -127,13 +126,24 @@ def get_buffer(config, game) -> (ChessEnv, list):
         env.winner = Winner.draw
         black_win = 0
 
-    black.finish_game(black_win)
-    white.finish_game(-black_win)
+    finish_game(black_data, black_win)
+    finish_game(white_data, -black_win)
 
-    data = []
-    for i in range(len(white.moves)):
-        data.append(white.moves[i])
-        if i < len(black.moves):
-            data.append(black.moves[i])
+    return env, black_data + white_data # I don't care order anymore
 
-    return env, data
+def sl_action(config, observation, my_action: chess.Move, weight=1):
+    policy = np.zeros(config.n_labels)
+
+    k = config.move_lookup[my_action]
+    policy[k] = weight
+
+    return [observation, list(policy)]
+
+def finish_game(moves, z):
+    """
+    :param self:
+    :param z: win=1, lose=-1, draw=0
+    :return:
+    """
+    for move in moves:  # add this game winner result to all past moves.
+        move += [z]

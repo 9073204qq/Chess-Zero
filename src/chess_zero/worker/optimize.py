@@ -41,20 +41,13 @@ class OptimizeWorker:
         self.filenames = deque(get_game_data_filenames(self.config.resource))
         shuffle(self.filenames)
         total_steps = self.config.trainer.start_total_steps
+        self.fill_queue2(frac = 1.0)
 
         while self.more_data:
-            self.fill_queue2()
             steps = self.train_epoch(self.config.trainer.epoch_to_checkpoint)
             total_steps += steps
             self.save_current_model()
-            a, b, c = self.dataset
-            assert len(a)==self.dataset_size or not self.more_data
-            for _ in range(self.config.trainer.dataset_size//2):
-                if len(a) == 0:
-                    break
-                a.popleft()
-                b.popleft()
-                c.popleft()
+            self.fill_queue2(frac = self.config.trainer.replace_rate) # this won't get the last fraction of data in the pgn file, but it's ok
 
     def train_epoch(self, epochs):
         tc = self.config.trainer
@@ -84,13 +77,15 @@ class OptimizeWorker:
         weight_path = os.path.join(model_dir, rc.next_generation_model_weight_filename)
         self.model.save(config_path, weight_path)
 
-    def fill_queue2(self):
-        a,b,c=self.dataset
-        while len(a) < self.config.trainer.dataset_size and self.more_data:
-            x,y,z= next(self.games)
+    def fill_queue2(self, frac):
+        a, b, c = self.dataset
+        amt = frac * self.dataset_size
+        while self.more_data and amt > 0:
+            x, y, z = next(self.games)
             a.extend(x)
             b.extend(y)
             c.extend(z)
+            amt -= len(x)
 
     def fill_queue(self):
         futures = deque()
@@ -147,13 +142,11 @@ class OptimizeWorker:
 
 def cross_entropy_with_logits(y_true, y_pred_logits):
     import tensorflow as tf
-    # tst = y_true*y_pred_logits
-    # tf.Assert(tst.shape==())
     return tf.reduce_mean(tf.reduce_sum(y_true,axis=1)*tf.reduce_logsumexp(y_pred_logits,axis=1)
      - tf.reduce_sum(y_true*y_pred_logits,axis=1))
 
 def load_data_from_game(config, game):
-    env, buf= get_buffer(config,game)
+    env, buf = get_buffer(config,game)
     del env
     return convert_to_cheating_data(buf)
 

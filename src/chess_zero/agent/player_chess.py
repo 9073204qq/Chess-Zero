@@ -32,7 +32,7 @@ class ChessPlayer:
 		self.play_config = play_config or self.config.play
 		self.labels_n = config.n_labels
 		self.labels = config.labels
-		self.move_lookup = {chess.Move.from_uci(move): i for move, i in zip(self.labels, range(self.labels_n))}
+		self.move_lookup = config.move_lookup
 		if dummy:
 			return
 
@@ -221,10 +221,10 @@ class ChessPlayer:
 		policy /= np.sum(policy)
 		return policy
 
-	def sl_action(self, observation, my_action, weight=1):
+	def sl_action(self, observation, my_action: chess.Move, weight=1):
 		policy = np.zeros(self.labels_n)
 
-		k = self.move_lookup[chess.Move.from_uci(my_action)]
+		k = self.move_lookup[my_action]
 		policy[k] = weight
 
 		self.moves.append([observation, list(policy)])
