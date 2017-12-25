@@ -40,8 +40,8 @@ class PlayConfig:
 class TrainerConfig:
     def __init__(self):
         self.min_data_size_to_learn = 0
-        self.replace_rate = 0.75
-        self.cleaning_processes = 5 # RAM explosion...
+        self.replace_rate = 1.0
+        self.cleaning_processes = 8 # RAM explosion...
         self.vram_frac = 1.0
         self.batch_size = 256 # tune this to your gpu memory
         self.epoch_to_checkpoint = 1

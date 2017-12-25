@@ -5,6 +5,7 @@ from datetime import datetime
 from logging import getLogger
 from threading import Thread
 from time import time
+import numpy as np
 
 import chess.pgn
 
@@ -105,14 +106,13 @@ def get_buffer(config, game) -> (ChessEnv, list):
     white_data, black_data = [], []
 
     for action in game.main_line():
-        if env.done:
-            break
+        assert not env.done
         #progress_weight = 1#k*2/len(actions)
         if env.white_to_move:
             white_data.append(sl_action(config, env.observation, action, white_weight))
         else:
             black_data.append(sl_action(config, env.observation, action, black_weight))
-        env.step(action, False)
+        env.step(action.uci(), False)
 
     if not env.board.is_game_over() and result != '1/2-1/2':
         env.resigned = True
@@ -132,12 +132,12 @@ def get_buffer(config, game) -> (ChessEnv, list):
     return env, black_data + white_data # I don't care order anymore
 
 def sl_action(config, observation, my_action: chess.Move, weight=1):
-    policy = np.zeros(config.n_labels)
+    policy = np.zeros(config.n_labels, dtype=np.float16)
 
     k = config.move_lookup[my_action]
     policy[k] = weight
 
-    return [observation, list(policy)]
+    return [observation, policy]
 
 def finish_game(moves, z):
     """

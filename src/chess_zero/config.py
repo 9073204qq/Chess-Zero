@@ -109,7 +109,7 @@ class Config:
     n_labels = int(len(labels))
     flipped_labels = flipped_uci_labels()
     unflipped_index = None
-    move_lookup = {chess.Move.from_uci(move): i for move, i in zip(self.labels, range(self.n_labels))}
+    move_lookup = {chess.Move.from_uci(move): i for move, i in zip(labels, range(n_labels))}
 
     def __init__(self, config_type="mini"):
         self.opts = Options()
@@ -117,8 +117,6 @@ class Config:
 
         if config_type == "mini":
             import chess_zero.configs.mini as c
-        elif config_type == "normal":
-            import chess_zero.configs.normal as c
         elif config_type == "distributed":
             import chess_zero.configs.distributed as c
         else:
@@ -128,9 +126,6 @@ class Config:
         self.play_data = c.PlayDataConfig()
         self.trainer = c.TrainerConfig()
         self.eval = c.EvaluateConfig()
-        self.labels = Config.labels
-        self.n_labels = Config.n_labels
-        self.flipped_labels = Config.flipped_labels
 
     @staticmethod
     def flip_policy(pol):
