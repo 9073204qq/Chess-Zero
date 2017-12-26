@@ -4,6 +4,7 @@ from logging import getLogger
 from chess_zero.agent.player_chess import ChessPlayer
 from chess_zero.config import Config, PlayWithHumanConfig
 from chess_zero.env.chess_env import ChessEnv
+from chess import STARTING_FEN
 
 logger = getLogger(__name__)
 
@@ -13,7 +14,7 @@ def start(config: Config):
     PlayWithHumanConfig().update_play_config(config.play)
 
     me_player = None
-    env = ChessEnv().reset()
+    env = ChessEnv()
 
     while True:
         line = input()
@@ -27,17 +28,17 @@ def start(config: Config):
                 me_player = get_player(config)
             print("readyok")
         elif words[0] == "ucinewgame":
-            env.reset()
+            env = ChessEnv()
         elif words[0] == "position":
             words=words[1].split(" ",1)
             if words[0] == "startpos":
-                env.reset()
+                fen = STARTING_FEN
             else:
                 fen = words[0]
                 for _ in range(5):
                     words = words[1].split(' ',1)
                     fen += " " + words[0]
-                env.update(fen)
+            env = ChessEnv(fen)
             if len(words) > 1:
                 words = words[1].split(" ",1)
                 if words[0] == "moves":

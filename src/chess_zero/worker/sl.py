@@ -37,7 +37,7 @@ class SupervisedLearningWorker:
         self.idx = 0
         start_time = time()
         with ProcessPoolExecutor(max_workers=7) as executor:
-            games, _ = get_games_from_all_files(self.config)
+            games = get_games_from_all_files(self.config)
             for res in as_completed([executor.submit(get_buffer, self.config, game) for game in games]): #poisoned reference (memleak)
                 self.idx += 1
                 env, data = res.result()
@@ -71,13 +71,13 @@ def get_games_from_all_files(config) -> list:
     print(files)
     games = []
     for filename in files:
-        g = get_games_from_file(filename)
+        g = get_games_from_file(config,filename)
         games.extend(g)
     print("done reading")
     return games
 
 
-def get_games_from_file(filename) -> list:
+def get_games_from_file(config,filename) -> list:
     pgn = open(filename, errors='ignore')
     offsets = list(chess.pgn.scan_offsets(pgn))
     n = len(offsets)
@@ -85,8 +85,13 @@ def get_games_from_file(filename) -> list:
     games = []
     for offset in offsets:
         pgn.seek(offset)
-        game = chess.pgn.read_game(pgn)
-        games.append(game)
+        try:
+            game = chess.pgn.read_game(pgn)
+        except:
+            continue
+        fics_type = game.headers["Event"].split(' ')[2] # E.g. "FICS rated wild/fr game"
+        if fics_type in config.trainer.types_allowed:
+            games.append(game)
     return games
 
 
@@ -96,7 +101,10 @@ def clip_elo_policy(config, elo):
 
 
 def get_buffer(config, game) -> (ChessEnv, list):
-    env = ChessEnv().reset()
+    if "FEN" in game.headers:
+        env = ChessEnv(game.headers["FEN"],chess960=True)
+    else:
+        env = ChessEnv(chess960=True)
     # white = ChessPlayer(config, dummy=True)
     # black = ChessPlayer(config, dummy=True)
     result = game.headers["Result"]
@@ -106,7 +114,7 @@ def get_buffer(config, game) -> (ChessEnv, list):
     white_data, black_data = [], []
 
     for action in game.main_line():
-        assert not env.done
+        #assert not env.done
         #progress_weight = 1#k*2/len(actions)
         if env.white_to_move:
             white_data.append(sl_action(config, env.observation, action, white_weight))

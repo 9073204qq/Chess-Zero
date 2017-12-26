@@ -9,12 +9,12 @@ class EvaluateConfig:
         self.play_config.tau_decay_rate = 0.6 # I need a better distribution...
         self.play_config.virtual_loss = 2
         self.evaluate_latest_first = True
-        self.max_game_length = 1000
+        self.max_game_length = 2
 
 
 class PlayDataConfig:
     def __init__(self):
-        self.min_elo_policy = 0 # 0 weight
+        self.min_elo_policy =  400 # 0 weight
         self.max_elo_policy = 1800 # 1 weight
         self.sl_nb_game_in_file = 250
         self.nb_game_in_file = 50
@@ -40,6 +40,7 @@ class PlayConfig:
 class TrainerConfig:
     def __init__(self):
         self.min_data_size_to_learn = 0
+        self.types_allowed = ["standard", "blitz", "lightning", 'wild/2','wild/3','wild/4','wild/5','wild/8','wild/8a','wild/fr']
         self.replace_rate = 1.0
         self.cleaning_processes = 8 # RAM explosion...
         self.vram_frac = 1.0

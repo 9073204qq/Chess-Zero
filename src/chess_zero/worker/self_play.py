@@ -78,7 +78,7 @@ class SelfPlayWorker:
 
 def self_play_buffer(config, cur) -> (ChessEnv, list):
     pipes = cur.pop() # borrow
-    env = ChessEnv().reset()
+    env = ChessEnv()
 
     white = ChessPlayer(config, pipes=pipes)
     black = ChessPlayer(config, pipes=pipes)

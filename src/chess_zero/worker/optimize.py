@@ -172,7 +172,7 @@ def convert_to_cheating_data(data):
             policy = Config.flip_policy(policy)
 
         move_number = int(state_fen.split(' ')[5])
-        value_certainty = min(15, move_number)/15 # reduces the noise of the opening... plz train faster
+        value_certainty = min(5, move_number)/5 # reduces the noise of the opening... plz train faster
         sl_value = value*value_certainty + testeval(state_fen, False)*(1-value_certainty)
 
         state_list.append(state_planes)

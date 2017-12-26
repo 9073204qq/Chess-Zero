@@ -1,5 +1,5 @@
 import enum
-import chess.pgn
+import chess
 import numpy as np
 import copy
 
@@ -22,25 +22,12 @@ precision = np.float16
 
 class ChessEnv:
 
-    def __init__(self):
-        self.board = None
+    def __init__(self, fen = chess.STARTING_FEN, chess960=False):
+        self.board = chess.Board(fen,chess960=chess960)
         self.num_halfmoves = 0
         self.winner = None  # type: Winner
         self.resigned = False
         self.result = None
-
-    def reset(self):
-        self.board = chess.Board()
-        self.num_halfmoves = 0
-        self.winner = None
-        self.resigned = False
-        return self
-
-    def update(self, board):
-        self.board = chess.Board(board)
-        self.winner = None
-        self.resigned = False
-        return self
 
     @property
     def done(self):

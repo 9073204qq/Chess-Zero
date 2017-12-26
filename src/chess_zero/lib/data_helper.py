@@ -5,20 +5,10 @@ from glob import glob
 from logging import getLogger
 
 import chess
-import pyperclip
 
 from chess_zero.config import ResourceConfig
 
 logger = getLogger(__name__)
-
-def prettyprint(env, colors):
-    new_pgn = open("test.pgn","at")
-    game = chess.pgn.Game.from_board(env.board)
-    game.headers["Result"] = env.board.result(claim_draw=True)
-    game.headers["White"], game.headers["Black"] = colors
-    new_pgn.write(str(game)+"\n\n")
-    new_pgn.close()
-    pyperclip.copy(env.board.fen())
 
 def pretty_print(env, colors):
     new_pgn = open("test3.pgn", "at")
@@ -28,7 +18,6 @@ def pretty_print(env, colors):
     game.headers["Date"] = datetime.now().strftime("%Y.%m.%d")
     new_pgn.write(str(game) + "\n\n")
     new_pgn.close()
-    pyperclip.copy(env.board.fen())
 
 
 def find_pgn_files(directory, pattern='*.pgn'):
