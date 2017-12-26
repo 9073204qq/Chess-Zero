@@ -16,6 +16,7 @@ def pretty_print(env, colors):
     game.headers["Result"] = env.result
     game.headers["White"], game.headers["Black"] = colors
     game.headers["Date"] = datetime.now().strftime("%Y.%m.%d")
+    game.headers["PlyCount"] = str(env.num_halfmoves)
     new_pgn.write(str(game) + "\n\n")
     new_pgn.close()
 

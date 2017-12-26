@@ -62,7 +62,7 @@ class ChessModel:
         x = Flatten(name="policy_flatten")(x)
         # no output for 'pass'
         policy_out = Dense(self.config.n_labels, kernel_regularizer=l2(mc.l2_reg), 
-            activation='linear', name="policy_out")(x)
+            activation='linear', name="policy")(x)
         
 
         # for value output
@@ -75,7 +75,7 @@ class ChessModel:
         x = Dense(mc.value_fc_size, kernel_regularizer=l2(mc.l2_reg), 
                    kernel_initializer=initializer, activation="relu", name="value_dense")(x)
         value_out = Dense(1, kernel_regularizer=l2(mc.l2_reg), 
-            activation="tanh", name="value_out")(x)
+            activation="tanh", name="value")(x)
 
         self.model = Model(in_x, [policy_out, value_out], name="chess_model")
 

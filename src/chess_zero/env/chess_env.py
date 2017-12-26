@@ -183,13 +183,16 @@ def check_current_planes(realfen, planes):
     assert realparts[2] == castlingstring
     assert realparts[3] == epstr
     assert int(realparts[4]) == fiftymove
-    # realparts[5] is the fifty-move clock, discard that
+    # realparts[5] is the move counter, discard that
     return "".join(fakefen) == replace_tags_board(realfen)
 
 
-def canon_input_planes(fen):
+def canon_input_planes(fen, check=False):
     fen = maybe_flip_fen(fen, is_black_turn(fen))
-    return all_input_planes(fen)
+    ret = all_input_planes(fen)
+    if check:
+        assert check_current_planes(fen, ret)
+    return ret
 
 
 def all_input_planes(fen):

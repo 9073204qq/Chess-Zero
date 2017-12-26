@@ -4,7 +4,7 @@ class EvaluateConfig:
         self.game_num = 50
         self.replace_rate = 0.55
         self.play_config = PlayConfig()
-        self.play_config.simulation_num_per_move = 200
+        self.play_config.simulation_num_per_move = 150
         self.play_config.c_puct = 1 # lower  = prefer mean action value
         self.play_config.tau_decay_rate = 0.6 # I need a better distribution...
         self.play_config.virtual_loss = 2
@@ -14,8 +14,8 @@ class EvaluateConfig:
 
 class PlayDataConfig:
     def __init__(self):
-        self.min_elo_policy =  400 # 0 weight
-        self.max_elo_policy = 1800 # 1 weight
+        #self.min_elo_policy =  400 # 0 weight
+        self.max_elo_policy =  1000 # 1 weight
         self.sl_nb_game_in_file = 250
         self.nb_game_in_file = 50
         self.max_file_num = 150
@@ -26,7 +26,7 @@ class PlayConfig:
         self.max_processes = 3
         self.search_threads = 16
         self.vram_frac = 1.0
-        self.simulation_num_per_move = 150
+        self.simulation_num_per_move = 200
         self.c_puct = 1.5
         self.noise_eps = 0.25
         self.dirichlet_alpha = 0.3

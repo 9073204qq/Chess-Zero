@@ -3,6 +3,5 @@ tensorflow-gpu
 keras
 profilehooks
 numpy
-pyperclip
 python-chess
 h5py
