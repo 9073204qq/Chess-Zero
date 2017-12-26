@@ -9,7 +9,7 @@ class EvaluateConfig:
         self.play_config.tau_decay_rate = 0.6 # I need a better distribution...
         self.play_config.virtual_loss = 2
         self.evaluate_latest_first = True
-        self.max_game_length = 2
+        self.max_game_length = 1000
 
 
 class PlayDataConfig:

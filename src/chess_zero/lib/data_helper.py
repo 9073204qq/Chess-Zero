@@ -4,7 +4,7 @@ from datetime import datetime
 from glob import glob
 from logging import getLogger
 
-import chess
+import chess.pgn
 
 from chess_zero.config import ResourceConfig
 
