@@ -96,8 +96,9 @@ def get_games_from_file(config,filename) -> list:
 
 
 def clip_elo_policy(config, elo):
-    return min(1, elo / config.play_data.max_elo_policy)
-    # 0 at 0, 1 after max_elo, linear in between
+    a, b = config.play_data.min_elo_policy, config.play_data.max_elo_policy
+    return min(1, max(0,elo-a) / (b-a))
+    # 0 at min_elo, 1 after max_elo, linear in between
 
 
 def get_buffer(config, game) -> (ChessEnv, list):

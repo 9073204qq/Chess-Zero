@@ -145,7 +145,8 @@ def testeval(fen, absolute = False) -> float:
     if not absolute and is_black_turn(fen):
         v = -v
     assert abs(v) < 1
-    return np.tanh(v * 3) # arbitrary
+    return v
+   # return np.tanh(v * 3) # arbitrary
 
 
 def check_current_planes(realfen, planes):

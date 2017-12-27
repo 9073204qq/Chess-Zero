@@ -38,6 +38,7 @@ class ChessPlayer:
 
 		self.pipe_pool = pipes
 		self.node_lock = defaultdict(Lock)
+		self.reset()
 
 	def reset(self):
 		self.tree = defaultdict(VisitStats)
