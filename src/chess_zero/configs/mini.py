@@ -44,11 +44,11 @@ class TrainerConfig:
         self.types_allowed = ["standard", "blitz", "lightning", 'wild/2','wild/3','wild/4','wild/5','wild/8','wild/8a','wild/fr']
         self.cleaning_processes = 8 # RAM explosion...
         self.vram_frac = 1.0
-        self.batch_size = 256 # tune this to your gpu memory
+        self.batch_size = 250 # tune this to your gpu memory
         self.epoch_to_checkpoint = 1
         self.replace_rate = 1.0
         self.data_dropout = 0.5 # gets fewer positions from the same game, hopefully reduce overfitting
-        self.dataset_size = 600000
+        self.dataset_size = 200000
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
