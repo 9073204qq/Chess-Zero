@@ -154,7 +154,7 @@ class OptimizeWorker:
         self.more_data = False
 
 def cross_entropy_with_logits(y_true, y_pred_logits):
-    return tf.nn.softmax_cross_entropy_with_logits(labels=y_true,logits=y_pred_logits)
+    #return tf.nn.softmax_cross_entropy_with_logits(labels=y_true,logits=y_pred_logits)
     return tf.reduce_mean(tf.reduce_sum(y_true,axis=1)*tf.reduce_logsumexp(y_pred_logits,axis=1)
      - tf.reduce_sum(y_true*y_pred_logits,axis=1))
 
