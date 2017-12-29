@@ -69,6 +69,7 @@ class ChessPlayer:
 		policy = self.calc_policy(env)
 		my_action = int(np.random.choice(range(self.labels_n), p = self.apply_temperature(policy, env.num_halfmoves)))
 
+		#self.deboog(env)
 		if can_stop and self.play_config.resign_threshold is not None and \
 						root_value <= self.play_config.resign_threshold \
 						and env.num_halfmoves > self.play_config.min_resign_turn:
@@ -246,6 +247,6 @@ def state_key(env: ChessEnv) -> str:
 	return fen[0]
 
 def softmax(logits):
-	ret = np.exp(logits,dtype=np.float32)
+	ret = np.exp(logits, dtype=np.float_)
 	ret /= np.sum(ret)
 	return ret

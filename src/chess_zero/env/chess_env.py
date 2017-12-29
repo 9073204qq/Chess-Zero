@@ -129,7 +129,7 @@ class ChessEnv:
 
 def testeval(fen, absolute = False) -> float:
     piece_vals = {'K': 3, 'Q': 14, 'R': 5, 'B': 3.25, 'N': 3, 'P': 1} # somehow it doesn't know how to keep its queen
-    ans = 0.0
+    ans = 0
     tot = 0
     for c in fen.split(' ')[0]:
         if not c.isalpha():
@@ -141,9 +141,10 @@ def testeval(fen, absolute = False) -> float:
         else:
             ans -= piece_vals[c.upper()]
             tot += piece_vals[c.upper()]
-    v = ans/tot
     if not absolute and is_black_turn(fen):
-        v = -v
+        ans = -ans
+    ans += 0.5 # to move advantage
+    v = ans/tot
     assert abs(v) < 1
     return v
    # return np.tanh(v * 3) # arbitrary
@@ -178,7 +179,7 @@ def check_current_planes(realfen, planes):
             if ep[rank][file] == 1:
                 epstr = coord_to_alg((rank, file))
 
-    realfen = maybe_flip_fen(realfen, flip=is_black_turn(realfen))
+    realfen = canon_fen(realfen)
     realparts = realfen.split(' ')
     assert realparts[1] == 'w'
     assert realparts[2] == castlingstring
@@ -189,7 +190,7 @@ def check_current_planes(realfen, planes):
 
 
 def canon_input_planes(fen, check=False):
-    fen = maybe_flip_fen(fen, is_black_turn(fen))
+    fen = canon_fen(fen)
     ret = all_input_planes(fen)
     if check:
         assert check_current_planes(fen, ret)
@@ -205,10 +206,13 @@ def all_input_planes(fen):
     assert ret.shape == (18, 8, 8)
     return ret
 
-
-def maybe_flip_fen(fen, flip = False):
-    if not flip:
+def canon_fen(fen):
+    if is_black_turn(fen):
+        return flip_fen(fen)
+    else:
         return fen
+
+def flip_fen(fen):
     foo = fen.split(' ')
     rows = foo[0].split('/')
     def swapcase(a):
@@ -217,10 +221,13 @@ def maybe_flip_fen(fen, flip = False):
         return a
     def swapall(aa):
         return "".join([swapcase(a) for a in aa])
+    def flipsq(a):
+        if a == '-': return a
+        return a[0]+str(9-int(a[1]))
     return "/".join([swapall(row) for row in reversed(rows)]) \
         + " " + ('w' if foo[1] == 'b' else 'b') \
         + " " + "".join(sorted(swapall(foo[2]))) \
-        + " " + foo[3] + " " + foo[4] + " " + foo[5]
+        + " " + flipsq(foo[3]) + " " + foo[4] + " " + foo[5]
 
 
 def aux_planes(fen):
