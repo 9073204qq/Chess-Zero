@@ -1,5 +1,5 @@
 import enum
-import chess.pgn
+import chess
 import numpy as np
 import copy
 
@@ -18,29 +18,16 @@ castling_order = 'KQkq'       # 4x8x8
 # en en_passant               # 1x8x8
 
 ind = {pieces_order[i]: i for i in range(12)}
-
+precision = np.float16
 
 class ChessEnv:
 
-    def __init__(self):
-        self.board = None
+    def __init__(self, fen = chess.STARTING_FEN, chess960=False):
+        self.board = chess.Board(fen,chess960=chess960)
         self.num_halfmoves = 0
         self.winner = None  # type: Winner
         self.resigned = False
         self.result = None
-
-    def reset(self):
-        self.board = chess.Board()
-        self.num_halfmoves = 0
-        self.winner = None
-        self.resigned = False
-        return self
-
-    def update(self, board):
-        self.board = chess.Board(board)
-        self.winner = None
-        self.resigned = False
-        return self
 
     @property
     def done(self):
@@ -142,7 +129,7 @@ class ChessEnv:
 
 def testeval(fen, absolute = False) -> float:
     piece_vals = {'K': 3, 'Q': 14, 'R': 5, 'B': 3.25, 'N': 3, 'P': 1} # somehow it doesn't know how to keep its queen
-    ans = 0.0
+    ans = 0
     tot = 0
     for c in fen.split(' ')[0]:
         if not c.isalpha():
@@ -154,11 +141,13 @@ def testeval(fen, absolute = False) -> float:
         else:
             ans -= piece_vals[c.upper()]
             tot += piece_vals[c.upper()]
-    v = ans/tot
     if not absolute and is_black_turn(fen):
-        v = -v
+        ans = -ans
+    ans += 0.5 # to move advantage
+    v = ans/tot
     assert abs(v) < 1
-    return np.tanh(v * 3) # arbitrary
+    return v
+   # return np.tanh(v * 3) # arbitrary
 
 
 def check_current_planes(realfen, planes):
@@ -190,19 +179,22 @@ def check_current_planes(realfen, planes):
             if ep[rank][file] == 1:
                 epstr = coord_to_alg((rank, file))
 
-    realfen = maybe_flip_fen(realfen, flip=is_black_turn(realfen))
+    realfen = canon_fen(realfen)
     realparts = realfen.split(' ')
     assert realparts[1] == 'w'
     assert realparts[2] == castlingstring
     assert realparts[3] == epstr
     assert int(realparts[4]) == fiftymove
-    # realparts[5] is the fifty-move clock, discard that
+    # realparts[5] is the move counter, discard that
     return "".join(fakefen) == replace_tags_board(realfen)
 
 
-def canon_input_planes(fen):
-    fen = maybe_flip_fen(fen, is_black_turn(fen))
-    return all_input_planes(fen)
+def canon_input_planes(fen, check=False):
+    fen = canon_fen(fen)
+    ret = all_input_planes(fen)
+    if check:
+        assert check_current_planes(fen, ret)
+    return ret
 
 
 def all_input_planes(fen):
@@ -214,10 +206,13 @@ def all_input_planes(fen):
     assert ret.shape == (18, 8, 8)
     return ret
 
-
-def maybe_flip_fen(fen, flip = False):
-    if not flip:
+def canon_fen(fen):
+    if is_black_turn(fen):
+        return flip_fen(fen)
+    else:
         return fen
+
+def flip_fen(fen):
     foo = fen.split(' ')
     rows = foo[0].split('/')
     def swapcase(a):
@@ -226,32 +221,35 @@ def maybe_flip_fen(fen, flip = False):
         return a
     def swapall(aa):
         return "".join([swapcase(a) for a in aa])
+    def flipsq(a):
+        if a == '-': return a
+        return a[0]+str(9-int(a[1]))
     return "/".join([swapall(row) for row in reversed(rows)]) \
         + " " + ('w' if foo[1] == 'b' else 'b') \
         + " " + "".join(sorted(swapall(foo[2]))) \
-        + " " + foo[3] + " " + foo[4] + " " + foo[5]
+        + " " + flipsq(foo[3]) + " " + foo[4] + " " + foo[5]
 
 
 def aux_planes(fen):
     foo = fen.split(' ')
 
-    en_passant = np.zeros((8, 8), dtype=np.float32)
+    en_passant = np.zeros((8, 8), dtype=precision)
     if foo[3] != '-':
         eps = alg_to_coord(foo[3])
         en_passant[eps[0]][eps[1]] = 1
 
     fifty_move_count = int(foo[4])
-    fifty_move = np.full((8, 8), fifty_move_count, dtype=np.float32)
+    fifty_move = np.full((8, 8), fifty_move_count, dtype=precision)
 
     castling = foo[2]
-    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=np.float32),
-                        np.full((8, 8), int('Q' in castling), dtype=np.float32),
-                        np.full((8, 8), int('k' in castling), dtype=np.float32),
-                        np.full((8, 8), int('q' in castling), dtype=np.float32),
+    auxiliary_planes = [np.full((8, 8), int('K' in castling), dtype=precision),
+                        np.full((8, 8), int('Q' in castling), dtype=precision),
+                        np.full((8, 8), int('k' in castling), dtype=precision),
+                        np.full((8, 8), int('q' in castling), dtype=precision),
                         fifty_move,
                         en_passant]
 
-    ret = np.asarray(auxiliary_planes, dtype=np.float32)
+    ret = np.asarray(auxiliary_planes, dtype=precision)
     assert ret.shape == (6, 8, 8)
     return ret
 
@@ -289,7 +287,7 @@ def coord_to_alg(coord):
 
 def to_planes(fen):
     board_state = replace_tags_board(fen)
-    pieces_both = np.zeros(shape=(12, 8, 8), dtype=np.float32)
+    pieces_both = np.zeros(shape=(12, 8, 8), dtype=precision)
     for rank in range(8):
         for file in range(8):
             v = board_state[rank * 8 + file]

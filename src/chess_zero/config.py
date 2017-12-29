@@ -4,10 +4,10 @@ import numpy as np
 
 class PlayWithHumanConfig:
     def __init__(self):
-        self.simulation_num_per_move = 1200
+        self.simulation_num_per_move = 2000
         self.threads_multiplier = 2
         self.c_puct = 1 # lower  = prefer mean action value
-        self.noise_eps = 0
+        self.noise_eps = 0.1
         self.tau_decay_rate = 0  # start deterministic mode
         self.resign_threshold = None
 
@@ -68,11 +68,6 @@ def flipped_uci_labels():
 
     return [repl(x) for x in create_uci_labels()]
 
-def flipped_uci_labels():
-    def repl(x):
-        return "".join([(str(9-int(a)) if a.isdigit() else a) for a in x])
-        
-    return  [repl(x) for x in create_uci_labels()]
 
 def create_uci_labels():
     labels_array = []
@@ -107,12 +102,14 @@ def create_uci_labels():
                 labels_array.append(l + '7' + l_r + '8' + p)
     return labels_array
 
+import chess
 
 class Config:
     labels = create_uci_labels()
     n_labels = int(len(labels))
     flipped_labels = flipped_uci_labels()
     unflipped_index = None
+    move_lookup = {chess.Move.from_uci(move): i for move, i in zip(labels, range(n_labels))}
 
     def __init__(self, config_type="mini"):
         self.opts = Options()
@@ -120,8 +117,6 @@ class Config:
 
         if config_type == "mini":
             import chess_zero.configs.mini as c
-        elif config_type == "normal":
-            import chess_zero.configs.normal as c
         elif config_type == "distributed":
             import chess_zero.configs.distributed as c
         else:
@@ -131,9 +126,6 @@ class Config:
         self.play_data = c.PlayDataConfig()
         self.trainer = c.TrainerConfig()
         self.eval = c.EvaluateConfig()
-        self.labels = Config.labels
-        self.n_labels = Config.n_labels
-        self.flipped_labels = Config.flipped_labels
 
     @staticmethod
     def flip_policy(pol):

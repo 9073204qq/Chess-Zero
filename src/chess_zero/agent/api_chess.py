@@ -4,9 +4,7 @@ from threading import Thread
 import numpy as np
 
 from chess_zero.config import Config
-from multiprocessing import Manager
-from threading import Thread
-import numpy as np
+
 
 class ChessModelAPI:
     # noinspection PyUnusedLocal
@@ -35,7 +33,7 @@ class ChessModelAPI:
                     data.append(pipe.recv())
                     result_pipes.append(pipe)
 
-            data = np.asarray(data, dtype=np.float32)
+            data = np.asarray(data, dtype=np.float16)
             policy_ary, value_ary = self.agent_model.model.predict_on_batch(data)
             for pipe, p, v in zip(result_pipes, policy_ary, value_ary):
                 pipe.send((p, float(v)))

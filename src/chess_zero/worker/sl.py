@@ -5,6 +5,7 @@ from datetime import datetime
 from logging import getLogger
 from threading import Thread
 from time import time
+import numpy as np
 
 import chess.pgn
 
@@ -65,74 +66,100 @@ class SupervisedLearningWorker:
         thread.start()
         self.buffer = []
 
-def get_games_from_all_files(config):
+def get_games_from_all_files(config) -> list:
     files = find_pgn_files(config.resource.play_data_dir)
     print(files)
     games = []
     for filename in files:
-        games.extend(get_games_from_file(filename))
+        g = get_games_from_file(config,filename)
+        games.extend(g)
     print("done reading")
     return games
 
 
-def get_games_from_file(filename):
+def get_games_from_file(config,filename) -> list:
     pgn = open(filename, errors='ignore')
     offsets = list(chess.pgn.scan_offsets(pgn))
     n = len(offsets)
-    print(f"found {n} games")
+    print(f"found {n} games",end='',flush=True)
+    num_points = 0
     games = []
     for offset in offsets:
         pgn.seek(offset)
-        games.append(chess.pgn.read_game(pgn))
+        try:
+            game = chess.pgn.read_game(pgn)
+        except:
+            continue
+        fics_type = game.headers["Event"].split(' ')[2] # E.g. "FICS rated wild/fr game"
+        if fics_type in config.trainer.types_allowed:
+            games.append(game)
+            num_points += int(game.headers["PlyCount"])
+    print(f" with {num_points} positions")
+
     return games
 
 
 def clip_elo_policy(config, elo):
-    return min(1, max(0, elo - config.play_data.min_elo_policy) / config.play_data.max_elo_policy)
-    # 0 until min_elo, 1 after max_elo, linear in between
+    a, b = config.play_data.min_elo_policy, config.play_data.max_elo_policy
+    return min(1, max(0, elo-a) / (b-a))
+    # 0 at min_elo, 1 after max_elo, linear in between
 
 
-def get_buffer(config, game) -> (ChessEnv, list):
-    env = ChessEnv().reset()
-    white = ChessPlayer(config, dummy=True)
-    black = ChessPlayer(config, dummy=True)
+def get_buffer(config, game) -> list:
+    # if "FEN" in game.headers:
+    #     env = ChessEnv(game.headers["FEN"],chess960=True)
+    # else:
+    #     env = ChessEnv(chess960=True)
+    #env = ChessEnv()
+    # white = ChessPlayer(config, dummy=True)
+    # black = ChessPlayer(config, dummy=True)
     result = game.headers["Result"]
     white_elo, black_elo = int(game.headers["WhiteElo"]), int(game.headers["BlackElo"])
     white_weight = clip_elo_policy(config, white_elo)
     black_weight = clip_elo_policy(config, black_elo)
-    
-    actions = []
-    while not game.is_end():
-        game = game.variation(0)
-        actions.append(game.move.uci())
-    k = 0
-    while not env.done and k < len(actions):
-        if env.white_to_move:
-            action = white.sl_action(env.observation, actions[k], weight=white_weight) #ignore=True
+    white_better = white_elo > black_elo
+    white_data, black_data = [], []
+    board = chess.Board()
+
+    for action in game.main_line():
+        #assert not env.done
+        progress_weight = 1# min(env.num_halfmoves+4,10)/10 # .4 at half-move 0, 1 at half-move 6
+        if board.turn == chess.WHITE:
+            if white_better:
+                white_data.append(sl_action(config, board.fen(), action, white_weight*progress_weight))
         else:
-            action = black.sl_action(env.observation, actions[k], weight=black_weight) #ignore=True
-        env.step(action, False)
-        k += 1
+            if not white_better:
+                black_data.append(sl_action(config, board.fen(), action, black_weight*progress_weight))
+        board.push(action)
 
-    if not env.board.is_game_over() and result != '1/2-1/2':
-        env.resigned = True
     if result == '1-0':
-        env.winner = Winner.white
-        black_win = -1
+        white_score = 1
     elif result == '0-1':
-        env.winner = Winner.black
-        black_win = 1
+        white_score = -1
     else:
-        env.winner = Winner.draw
-        black_win = 0
+        white_score = 0
 
-    black.finish_game(black_win)
-    white.finish_game(-black_win)
+    finish_game(white_data, white_score)
+    finish_game(black_data, -white_score)
 
-    data = []
-    for i in range(len(white.moves)):
-        data.append(white.moves[i])
-        if i < len(black.moves):
-            data.append(black.moves[i])
+    if white_better:
+        return white_data
+    else:
+        return black_data # I don't care order anymore
 
-    return env, data
+def sl_action(config, observation, my_action: chess.Move, weight=1):
+    policy = np.zeros(config.n_labels, dtype=np.float16)
+
+    k = config.move_lookup[my_action]
+    policy[k] = weight
+
+    return [observation, policy]
+
+def finish_game(moves, z):
+    """
+    :param self:
+    :param z: win=1, lose=-1, draw=0
+    :return:
+    """
+    for move in moves:  # add this game winner result to all past moves.
+        move += [z]

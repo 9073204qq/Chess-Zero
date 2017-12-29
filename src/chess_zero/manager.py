@@ -2,13 +2,15 @@ import argparse
 
 from logging import getLogger,disable
 
+from chess_zero.agent.model_chess import ChessModel
+from chess_zero.lib.model_helper import save_as_best_model
 from .lib.logger import setup_logger
 from .config import Config
 from .lib.tf_util import set_session_config
 
 logger = getLogger(__name__)
 
-CMD_LIST = ['self', 'opt', 'eval', 'sl', 'uci']
+CMD_LIST = ['self', 'opt', 'eval', 'sl', 'uci', 'new']
 
 
 def create_parser():
@@ -29,7 +31,7 @@ def setup(config: Config, args):
 
 
 def start():
-    set_session_config(1900/12000,True)
+    set_session_config(1800/12000,True)
     parser = create_parser()
     args = parser.parse_args()
     config_type = args.type
@@ -57,3 +59,8 @@ def start():
     elif args.cmd == 'uci':
         from .play_game import uci
         return uci.start(config)
+    elif args.cmd == 'new':
+        model = ChessModel(config)
+        model.build()
+        save_as_best_model(model)
+        return model

@@ -105,7 +105,7 @@ class EvaluateWorker:
 def play_game(config, cur, ng, current_white: bool) -> (float, ChessEnv, bool):
     cur_pipes = cur.pop()
     ng_pipes = ng.pop()
-    env = ChessEnv().reset()
+    env = ChessEnv()
 
     current_player = ChessPlayer(config, pipes=cur_pipes, play_config=config.eval.play_config)
     ng_player = ChessPlayer(config, pipes=ng_pipes, play_config=config.eval.play_config)
