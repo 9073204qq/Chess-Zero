@@ -4,6 +4,7 @@ from logging import getLogger,disable
 
 from .lib.logger import setup_logger
 from .config import Config
+from .lib.tf_util import set_session_config
 
 logger = getLogger(__name__)
 
@@ -28,6 +29,7 @@ def setup(config: Config, args):
 
 
 def start():
+    set_session_config(1900/12000,True)
     parser = create_parser()
     args = parser.parse_args()
     config_type = args.type
