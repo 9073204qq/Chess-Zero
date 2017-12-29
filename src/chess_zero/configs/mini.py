@@ -15,7 +15,7 @@ class EvaluateConfig:
 
 class PlayDataConfig:
     def __init__(self):
-        self.min_elo_policy =  900 # 0 weight
+        self.min_elo_policy = 1200 # 0 weight
         self.max_elo_policy = 1800 # 1 weight
         self.sl_nb_game_in_file = 250
         self.nb_game_in_file = 50
@@ -52,7 +52,7 @@ class TrainerConfig:
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
-        self.loss_weights = [10, 10] # [policy, value] I'm using policy weights so scale back up
+        self.loss_weights = [10, 5] # [policy, value] I'm using policy weights so scale back up
 
 
 class ModelConfig:

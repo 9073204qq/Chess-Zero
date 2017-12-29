@@ -125,11 +125,9 @@ def get_buffer(config, game) -> list:
         #assert not env.done
         progress_weight = 1# min(env.num_halfmoves+4,10)/10 # .4 at half-move 0, 1 at half-move 6
         if board.turn == chess.WHITE:
-            if white_better:
-                white_data.append(sl_action(config, board.fen(), action, white_weight*progress_weight))
+            white_data.append(sl_action(config, board.fen(), action, white_weight*progress_weight))
         else:
-            if not white_better:
-                black_data.append(sl_action(config, board.fen(), action, black_weight*progress_weight))
+            black_data.append(sl_action(config, board.fen(), action, black_weight*progress_weight))
         board.push(action)
 
     if result == '1-0':
@@ -141,6 +139,8 @@ def get_buffer(config, game) -> list:
 
     finish_game(white_data, white_score)
     finish_game(black_data, -white_score)
+
+    return white_data+black_data
 
     if white_better:
         return white_data
