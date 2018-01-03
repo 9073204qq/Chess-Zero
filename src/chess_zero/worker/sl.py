@@ -114,22 +114,6 @@ def get_buffer(config, game) -> list:
     # white = ChessPlayer(config, dummy=True)
     # black = ChessPlayer(config, dummy=True)
     result = game.headers["Result"]
-    white_elo, black_elo = int(game.headers["WhiteElo"]), int(game.headers["BlackElo"])
-    white_weight = clip_elo_policy(config, white_elo)
-    black_weight = clip_elo_policy(config, black_elo)
-    white_better = white_elo > black_elo
-    white_data, black_data = [], []
-    board = chess.Board()
-
-    for action in game.main_line():
-        #assert not env.done
-        progress_weight = 1# min(env.num_halfmoves+4,10)/10 # .4 at half-move 0, 1 at half-move 6
-        if board.turn == chess.WHITE:
-            white_data.append(sl_action(config, board.fen(), action, white_weight*progress_weight))
-        else:
-            black_data.append(sl_action(config, board.fen(), action, black_weight*progress_weight))
-        board.push(action)
-
     if result == '1-0':
         white_score = 1
     elif result == '0-1':
@@ -137,29 +121,38 @@ def get_buffer(config, game) -> list:
     else:
         white_score = 0
 
-    finish_game(white_data, white_score)
-    finish_game(black_data, -white_score)
+    white_elo, black_elo = int(game.headers["WhiteElo"]), int(game.headers["BlackElo"])
+    white_weight = clip_elo_policy(config, white_elo)
+    black_weight = clip_elo_policy(config, black_elo)
+    white_better = white_elo > black_elo
+    data = []
+    # white_data, black_data = [], []
+    board = chess.Board()
 
-    return white_data+black_data
+    for action in game.main_line():
+        #assert not env.done
+        progress_weight = 1# min(env.num_halfmoves+4,10)/10 # .4 at half-move 0, 1 at half-move 6
+        if board.turn == chess.WHITE:
+            frame = sl_action(config, board.fen(), action, white_weight*progress_weight)
+            frame.append(white_score)
+            data.append(frame)
+        else:
+            frame = sl_action(config, board.fen(), action, black_weight*progress_weight)
+            frame.append(-white_score)
+            data.append(frame)
+        board.push(action)
 
-    if white_better:
-        return white_data
-    else:
-        return black_data # I don't care order anymore
+    return data
+
+    # if white_better:
+    #     return white_data
+    # else:
+    #     return black_data # I don't care order anymore
 
 def sl_action(config, observation, my_action: chess.Move, weight=1):
-    policy = np.zeros(config.n_labels, dtype=np.float16)
+    policy = np.zeros(config.n_labels)
 
     k = config.move_lookup[my_action]
     policy[k] = weight
 
     return [observation, policy]
-
-def finish_game(moves, z):
-    """
-    :param self:
-    :param z: win=1, lose=-1, draw=0
-    :return:
-    """
-    for move in moves:  # add this game winner result to all past moves.
-        move += [z]

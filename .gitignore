@@ -22,3 +22,4 @@ logs/
 *.sh
 requirements.txt
 trace.html
+src/chess_zero/manager.py

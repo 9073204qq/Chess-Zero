@@ -5,7 +5,7 @@ class EvaluateConfig:
         self.replace_rate = 0.55
         self.play_config = PlayConfig()
         self.play_config.simulation_num_per_move = 150
-        self.play_config.c_puct = 1 # lower  = prefer mean action value
+        self.play_config.c_puct = 1.5 # lower  = prefer mean action value
         self.play_config.tau_decay_rate = 0.6 # I need a better distribution...
         self.play_config.virtual_loss = 2
         self.play_config.noise_eps = 0
@@ -47,12 +47,12 @@ class TrainerConfig:
         self.batch_size = 250 # tune this to your gpu memory
         self.epoch_to_checkpoint = 1
         self.replace_rate = 1.0
-        self.data_dropout = 0.5 # gets fewer positions from the same game, hopefully reduce overfitting
+        #self.data_dropout = 0.5 # gets fewer positions from the same game, hopefully reduce overfitting
         self.dataset_size = 200000
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
-        self.loss_weights = [10, 5] # [policy, value] I'm using policy weights so scale back up
+        self.loss_weights = [10, 10] # [policy, value] I'm using policy weights so scale back up
 
 
 class ModelConfig:

@@ -31,7 +31,7 @@ def setup(config: Config, args):
 
 
 def start():
-    set_session_config(1800/12000,True)
+    #set_session_config(1800/12000,True)
     parser = create_parser()
     args = parser.parse_args()
     config_type = args.type
