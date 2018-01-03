@@ -52,7 +52,7 @@ class TrainerConfig:
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
-        self.loss_weights = [10, 10] # [policy, value] I'm using policy weights so scale back up
+        self.loss_weights = [20, 10] # [policy, value] I'm using policy weights so scale back up
 
 
 class ModelConfig:
