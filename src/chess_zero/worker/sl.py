@@ -6,6 +6,7 @@ from logging import getLogger
 from threading import Thread
 from time import time
 import numpy as np
+from random import random
 
 import chess.pgn
 
@@ -132,14 +133,17 @@ def get_buffer(config, game) -> list:
     for action in game.main_line():
         #assert not env.done
         progress_weight = 1# min(env.num_halfmoves+4,10)/10 # .4 at half-move 0, 1 at half-move 6
-        if board.turn == chess.WHITE:
-            frame = sl_action(config, board.fen(), action, white_weight*progress_weight)
-            frame.append(white_score)
-            data.append(frame)
-        else:
-            frame = sl_action(config, board.fen(), action, black_weight*progress_weight)
-            frame.append(-white_score)
-            data.append(frame)
+        if random() > config.trainer.data_dropout:
+            if board.turn == chess.WHITE:
+                #if white_weight>0:
+                frame = sl_action(config, board.fen(), action, white_weight*progress_weight)
+                frame.append(white_score)
+                data.append(frame)
+            else:
+                #if black_weight>0:
+                frame = sl_action(config, board.fen(), action, black_weight*progress_weight)
+                frame.append(-white_score)
+                data.append(frame)
         board.push(action)
 
     return data

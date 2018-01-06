@@ -4,18 +4,18 @@ class EvaluateConfig:
         self.game_num = 50
         self.replace_rate = 0.55
         self.play_config = PlayConfig()
-        self.play_config.simulation_num_per_move = 150
-        self.play_config.c_puct = 1.5 # lower  = prefer mean action value
+        self.play_config.simulation_num_per_move = 200
+        self.play_config.c_puct = 1 # lower  = prefer mean action value
         self.play_config.tau_decay_rate = 0.6 # I need a better distribution...
         self.play_config.virtual_loss = 2
-        self.play_config.noise_eps = 0
+        self.play_config.noise_eps = 0.1
         self.evaluate_latest_first = True
         self.max_game_length = 1000
 
 
 class PlayDataConfig:
     def __init__(self):
-        self.min_elo_policy = 1200 # 0 weight
+        self.min_elo_policy = 1799 # 0 weight
         self.max_elo_policy = 1800 # 1 weight
         self.sl_nb_game_in_file = 250
         self.nb_game_in_file = 50
@@ -47,17 +47,17 @@ class TrainerConfig:
         self.batch_size = 250 # tune this to your gpu memory
         self.epoch_to_checkpoint = 1
         self.replace_rate = 1.0
-        #self.data_dropout = 0.5 # gets fewer positions from the same game, hopefully reduce overfitting
-        self.dataset_size = 200000
+        self.data_dropout = 0.0 # drops a datapoint with prob. p, get less positions from same game to (hopefully) reduce overfitting
+        self.dataset_size = 100000 # how big do i need to stop overfitting?
         self.start_total_steps = 0
         self.save_model_steps = 25
         self.load_data_steps = 100
-        self.loss_weights = [20, 10] # [policy, value] I'm using policy weights so scale back up
+        self.loss_weights = [1, 1] # [policy, value] I'm using policy weights so scale back up
 
 
 class ModelConfig:
     cnn_filter_num = 256
-    cnn_first_filter_size = 3
+    cnn_first_filter_size = 5
     cnn_filter_size = 3
     res_layer_num = 12
     l2_reg = 1e-4

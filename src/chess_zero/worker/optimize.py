@@ -75,7 +75,7 @@ class OptimizeWorker:
 
     def save_current_model(self):
         rc = self.config.resource
-        model_id = datetime.now().strftime("%Y%m%d-%H%M%S.%f")
+        model_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         model_dir = os.path.join(rc.next_generation_model_dir, rc.next_generation_model_dirname_tmpl % model_id)
         os.makedirs(model_dir, exist_ok=True)
         config_path = os.path.join(model_dir, rc.next_generation_model_config_filename)
@@ -193,8 +193,8 @@ def convert_to_cheating_data(data):
         #     print(my_move, canon_fe)
 
         move_number = int(state_fen.split(' ')[5])
-        value_certainty = 0#min(move_number,10)/10 # this NN really sucks at material evaluation
-        sl_value = value * value_certainty + testeval(state_fen, False)*(1-value_certainty)
+        value_certainty = 0.5#min(move_number,10)/10 # this NN really sucks at material evaluation
+        sl_value = value #* value_certainty + testeval(state_fen, False)*(1-value_certainty)
 
         state_list.append(state_planes)
         policy_list.append(policy)

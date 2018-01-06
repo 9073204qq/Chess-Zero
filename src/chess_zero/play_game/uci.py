@@ -47,7 +47,8 @@ def start(config: Config):
         elif words[0] == "go":
             if not me_player:
                 me_player = get_player(config)
-            action = me_player.action(env, False)
+            action, frame = me_player.action(env, can_stop=False, dbg=True)
+            print(f"info score cp {int(frame[2]*100)}")
             print(f"bestmove {action}")
         elif words[0] == "stop":
             pass

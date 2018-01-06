@@ -5,6 +5,7 @@ from threading import Lock
 
 import chess
 import numpy as np
+import copy
 
 from chess_zero.config import Config
 from chess_zero.env.chess_env import ChessEnv, Winner
@@ -22,7 +23,6 @@ class ActionStats:
 	def __init__(self):
 		self.n = 0
 		self.w = 0
-		self.q = 0
 
 class ChessPlayer:
 	def __init__(self, config: Config, pipes=None, play_config=None, dummy=False):
@@ -37,10 +37,10 @@ class ChessPlayer:
 			return
 
 		self.pipe_pool = pipes
-		self.node_lock = defaultdict(Lock)
 		self.reset()
 
 	def reset(self):
+		self.node_lock = defaultdict(Lock)
 		self.tree = defaultdict(VisitStats)
 
 	def deboog(self, env):
@@ -62,32 +62,34 @@ class ChessPlayer:
 				  f'q: {s[2]:7.3f} '
 				  f'p: {s[3]:7.5f}')
 
-	def action(self, env, can_stop = True) -> str:
-		self.reset()
 
-		root_value, naked_value = self.search_moves(env)
-		policy = self.calc_policy(env)
-		my_action = int(np.random.choice(range(self.labels_n), p = self.apply_temperature(policy, env.num_halfmoves)))
+	def action(self, env, can_stop = True, reset = True, dbg = False) -> (str, list):
+		if reset: self.reset()
+		policy, root_value = self.search_moves(env)
 
-		#self.deboog(env)
+		my_action = np.random.choice(self.config.labels, p = self.apply_temperature(policy, env.num_halfmoves))
+		if dbg: self.deboog(env)
 		if can_stop and self.play_config.resign_threshold is not None and \
 						root_value <= self.play_config.resign_threshold \
 						and env.num_halfmoves > self.play_config.min_resign_turn:
 			# noinspection PyTypeChecker
-			return None
-		else:
-			self.moves.append([env.observation, list(policy)])
-			return self.config.labels[my_action]
+			my_action = None
+			# self.moves.append([env.observation, list(policy), root_value])
+		return my_action, [env.observation, list(policy), root_value]
 
-	def search_moves(self, env) -> (float, float):
+	def search_moves(self, env) -> (np.ndarray, float):
 		futures = []
 		with ThreadPoolExecutor(max_workers=self.play_config.search_threads) as executor:
 			for _ in range(self.play_config.simulation_num_per_move):
-				futures.append(executor.submit(self.search_my_move,env=env.copy(),is_root_node=True))
+				futures.append(executor.submit(self.search_my_move, env=env.copy(), is_root_node=True))
 
 		vals = [f.result() for f in futures]
 
-		return np.max(vals), vals[0] # vals[0] is kind of racy
+		return self.calc_policy(env), self.max_q(env) # vals[0] is kind of racy
+
+	def max_q(self, env) -> float:
+		state = state_key(env)
+		return max(a_s.q for a_s in self.tree[state].a.values())
 
 	def search_my_move(self, env: ChessEnv, is_root_node=False) -> float:
 		"""
@@ -106,21 +108,24 @@ class ChessPlayer:
 		with self.node_lock[state]:
 			if state not in self.tree:
 				leaf_p, leaf_v = self.expand_and_evaluate(env)
+
 				self.tree[state].p = leaf_p
+				self.tree[state].v = leaf_v
 				return leaf_v # I'm returning everything from the POV of side to move
 
-			# SELECT STEP
-			action_t = self.select_action_q_and_u(env, is_root_node)
+		# SELECT STEP
+		action_t = self.select_action_q_and_u(env, is_root_node)
 
-			virtual_loss = self.play_config.virtual_loss
+		virtual_loss = self.play_config.virtual_loss
 
+		with self.node_lock[state]:
 			my_visit_stats = self.tree[state]
 			my_stats = my_visit_stats.a[action_t]
 
 			my_visit_stats.sum_n += virtual_loss
 			my_stats.n += virtual_loss
 			my_stats.w += -virtual_loss
-			my_stats.q = my_stats.w / my_stats.n
+			my_stats.q = my_stats.w/my_stats.n
 
 		env.step(action_t.uci())
 		leaf_v = self.search_my_move(env)  # next move from enemy POV
@@ -133,7 +138,7 @@ class ChessPlayer:
 			my_visit_stats.sum_n += -virtual_loss + 1
 			my_stats.n += -virtual_loss + 1
 			my_stats.w += virtual_loss + leaf_v
-			my_stats.q = my_stats.w / my_stats.n
+			my_stats.q = my_stats.w/my_stats.n
 
 		return leaf_v
 
@@ -163,37 +168,29 @@ class ChessPlayer:
 	def select_action_q_and_u(self, env, is_root_node) -> chess.Move:
 		# this method is called with state locked
 		state = state_key(env)
+		with self.node_lock[state]:
+			my_visit_stats = self.tree[state]
+			if my_visit_stats.p is not None: #push p to edges
+				moves = env.board.legal_moves
+				mov_ps = [my_visit_stats.p[self.move_lookup[mov]] for mov in moves]
+				tot_p = 1e-8 + sum(mov_ps)
+				for mov, mov_p in zip(moves, mov_ps):
+					a_s = my_visit_stats.a[mov]
+					a_s.p = mov_p / tot_p
+					a_s.q = my_visit_stats.v # Set to parent node NN eval
+				my_visit_stats.p = None
 
-		my_visit_stats = self.tree[state]
+			actions = my_visit_stats.a.items()
+			xx_ = self.play_config.c_puct * np.sqrt(my_visit_stats.sum_n + 1)  # sqrt of sum(N(s, b); for all b)
 
-		if my_visit_stats.p is not None: #push p to edges
-			tot_p = 1e-8
-			for mov in env.board.legal_moves:
-				mov_p = my_visit_stats.p[self.move_lookup[mov]]
-				my_visit_stats.a[mov].p = mov_p
-				tot_p += mov_p
-			for a_s in my_visit_stats.a.values():
-				a_s.p /= tot_p
-			my_visit_stats.p = None
-
-		xx_ = np.sqrt(my_visit_stats.sum_n + 1)  # sqrt of sum(N(s, b); for all b)
-
-		e = self.play_config.noise_eps
-		c_puct = self.play_config.c_puct
-		dir_alpha = self.play_config.dirichlet_alpha
-
-		best_s = -999
-		best_a = None
-
-		for action, a_s in my_visit_stats.a.items():
-			p_ = a_s.p
-			if is_root_node:
-				p_ = (1-e) * p_ + e * np.random.dirichlet([dir_alpha])
-			b = a_s.q + c_puct * p_ * xx_ / (1 + a_s.n)
-			if b > best_s:
-				best_s = b
-				best_a = action
-
+		if is_root_node:
+			e = self.play_config.noise_eps
+			dir_alpha = self.play_config.dirichlet_alpha
+			best_a = max(actions, \
+				key=lambda item: item[1].q + (xx_ * ((1-e)*item[1].p + e*np.random.dirichlet([dir_alpha]))) / (1 + item[1].n))[0]
+		else:
+			best_a = max(actions, \
+				key=lambda item: item[1].q + (xx_ * item[1].p) / (1 + item[1].n))[0]
 		return best_a
 
 	def apply_temperature(self, policy, turn):
@@ -222,24 +219,6 @@ class ChessPlayer:
 
 		policy /= np.sum(policy)
 		return policy
-
-	def sl_action(self, observation, my_action: chess.Move, weight=1):
-		policy = np.zeros(self.labels_n)
-
-		k = self.move_lookup[my_action]
-		policy[k] = weight
-
-		self.moves.append([observation, list(policy)])
-		return my_action
-
-	def finish_game(self, z):
-		"""
-		:param self:
-		:param z: win=1, lose=-1, draw=0
-		:return:
-		"""
-		for move in self.moves:  # add this game winner result to all past moves.
-			move += [z]
 
 
 def state_key(env: ChessEnv) -> str:

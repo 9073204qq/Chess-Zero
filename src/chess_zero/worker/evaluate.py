@@ -116,9 +116,9 @@ def play_game(config, cur, ng, current_white: bool) -> (float, ChessEnv, bool):
 
     while not env.done:
         if env.white_to_move:
-            action = white.action(env)
+            action, _ = white.action(env)
         else:
-            action = black.action(env)
+            action, _ = black.action(env)
         env.step(action)
         if env.num_halfmoves >= config.eval.max_game_length:
             env.adjudicate()
